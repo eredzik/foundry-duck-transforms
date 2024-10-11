@@ -1,0 +1,4 @@
+.venv/
+.pdm-build/
+autostubs/
+test_lib.py
