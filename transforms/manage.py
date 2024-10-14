@@ -6,6 +6,7 @@ from typing import TypeVar
 
 import duckdb
 from foundry_dev_tools import FoundryContext
+from foundry_dev_tools.errors.dataset import BranchNotFoundError
 
 from transforms.api import Transform
 
@@ -62,11 +63,29 @@ class FoundryManager:
     def collect_transform_inputs(self, transform: Transform[T]) -> None:
         for input in transform.inputs.values():
             if input.branch is None:
-                input.branch = self.branch_name
-            self.get_dataset_from_foundry_into_duckdb(
-                input.path_or_rid,
-                branch=input.branch,
-            )
+                
+                self.get_dataset_from_foundry_into_duckdb(
+                    input.path_or_rid,
+                    branch=input.branch,
+                )
+                return
+            else:
+                try:
+                    self.get_dataset_from_foundry_into_duckdb(
+                        input.path_or_rid,
+                        branch=input.branch,
+                    )
+                    return
+                except BranchNotFoundError as e:
+                    for branch in self.fallback_branches:
+                        self.get_dataset_from_foundry_into_duckdb(
+                            input.path_or_rid,
+                            branch=branch,
+                        )
+                        return
+                    else:
+                        raise e
+
         return
 
     def collect_transform_outputs(self, transform: Transform[T]) -> None:
