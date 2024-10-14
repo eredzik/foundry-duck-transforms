@@ -6,8 +6,6 @@ from typing import TypeVar
 import duckdb
 from foundry_dev_tools import FoundryContext
 
-from ...transforms.transforms.api.transform_df import Transform
-
 T = TypeVar("T")
 
 
