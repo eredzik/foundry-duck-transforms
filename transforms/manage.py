@@ -1,13 +1,13 @@
 import re
 from dataclasses import dataclass
 from datetime import datetime
-from typing import TYPE_CHECKING, TypeVar
+from typing import TypeVar
 
 import duckdb
 from foundry_dev_tools import FoundryContext
 
-if TYPE_CHECKING:
-    from transforms.api import Transform
+from transforms.api import Transform
+
 T = TypeVar("T")
 
 
@@ -37,13 +37,13 @@ class FoundryManager:
         else:
             self.fallback_branches = [] if self.branch_name == "master" else ["master"]
 
-        duckdb_conn.execute(
+        self.duckdb_conn.execute(
             f"CREATE SCHEMA IF NOT EXISTS fndry_{sanitize(self.branch_name)}"
         )
-        duckdb_conn.execute("CREATE SCHEMA IF NOT EXISTS work")
-        duckdb_conn.execute("CREATE SCHEMA IF NOT EXISTS meta")
-        duckdb_conn.execute("""
-            CREATE TABLE IF NOT EXISTS datasets_versions (
+        self.duckdb_conn.execute("CREATE SCHEMA IF NOT EXISTS work")
+        self.duckdb_conn.execute("CREATE SCHEMA IF NOT EXISTS meta")
+        self.duckdb_conn.execute("""
+            CREATE TABLE IF NOT EXISTS meta.datasets_versions (
                 dataset_rid VARCHAR,
                 dataset_branch VARCHAR,
                 sanitized_rid VARCHAR,
@@ -53,12 +53,13 @@ class FoundryManager:
             ) """)
 
         for branch in self.fallback_branches:
-            duckdb_conn.execute(f"CREATE SCHEMA IF NOT EXISTS fndry_{sanitize(branch)}")
-
-        pass
+            self.duckdb_conn.execute(f"CREATE SCHEMA IF NOT EXISTS fndry_{sanitize(branch)}")
+        self.duckdb_conn.commit()
 
     def collect_transform_inputs(self, transform: Transform[T]) -> None:
-        return None
+        for input in transform.inputs.values():
+            self.get_dataset_from_foundry_into_duckdb(input.path_or_rid)
+        return 
 
     def collect_transform_outputs(self, transform: Transform[T]) -> None:
         return None
@@ -76,11 +77,15 @@ class FoundryManager:
             return False
         
         with self.ctx.cached_foundry_client.api.download_dataset_files_temporary(dataset_rid=dataset_rid, view=self.branch_name, ) as temp_output:
-            self.duckdb_conn.execute(f"CREATE SCHEMA IF NOT EXISTS fndry_{sanitize(self.branch_name)}")
-            self.duckdb_conn.execute(f"CREATE TABLE IF NOT EXISTS fndry_{sanitize(self.branch_name)}.{identity['dataset_path']} AS SELECT * FROM read_parquet('{temp_output}')")
+            sanitized_dataset_name=sanitize(identity['dataset_path'])
+            sanitized_branch_name=sanitize(self.branch_name)
+            self.duckdb_conn.execute(f"CREATE SCHEMA IF NOT EXISTS fndry_{sanitized_branch_name}")
+            create_table_query = f"CREATE TABLE IF NOT EXISTS fndry_{sanitized_branch_name}.{sanitized_dataset_name} AS SELECT * FROM read_parquet('{temp_output}')"
+            self.duckdb_conn.execute(create_table_query)
             self.duckdb_conn.execute(
                 f"INSERT INTO meta.datasets_versions VALUES ('{dataset_rid}', '{self.branch_name}', '{identity['dataset_path']}', '{self.branch_name}', '{identity['dataset_path']}', '{datetime.now()}')"
             )
+            return True
 
 
     def get_meta_for_dataset(self, dataset_rid: str, branch: str = "master"):
@@ -103,4 +108,4 @@ class FoundryManager:
 
 
 def sanitize(branch_name: str) -> str:
-    return re.sub("^[a-zA-Z0-9_]", "_", branch_name)
+    return re.sub("[^a-zA-Z0-9_]", "_", branch_name)

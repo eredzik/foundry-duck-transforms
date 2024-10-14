@@ -1,8 +1,7 @@
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, Callable, Concatenate, Generic, ParamSpec
+from typing import Callable, Concatenate, Generic, ParamSpec
 
-if TYPE_CHECKING:
-    from pyspark.sql import DataFrame
+from pyspark.sql import DataFrame
 
 
 @dataclass
