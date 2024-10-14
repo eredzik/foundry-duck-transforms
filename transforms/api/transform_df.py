@@ -3,6 +3,8 @@ from typing import Callable, Concatenate, Generic, ParamSpec
 
 from pyspark.sql import DataFrame
 
+from .check import Check
+
 
 @dataclass
 class Input:
@@ -11,6 +13,7 @@ class Input:
 @dataclass
 class Output:
     path_or_rid:str
+    checks: Check | None = None
 
 TransformParamSpec = ParamSpec("TransformParamSpec")
 @dataclass
