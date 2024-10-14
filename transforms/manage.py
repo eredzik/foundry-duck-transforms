@@ -1,6 +1,7 @@
 import re
 from dataclasses import dataclass
 from datetime import datetime
+from pathlib import Path
 from typing import TypeVar
 
 import duckdb
@@ -53,13 +54,20 @@ class FoundryManager:
             ) """)
 
         for branch in self.fallback_branches:
-            self.duckdb_conn.execute(f"CREATE SCHEMA IF NOT EXISTS fndry_{sanitize(branch)}")
+            self.duckdb_conn.execute(
+                f"CREATE SCHEMA IF NOT EXISTS fndry_{sanitize(branch)}"
+            )
         self.duckdb_conn.commit()
 
     def collect_transform_inputs(self, transform: Transform[T]) -> None:
         for input in transform.inputs.values():
-            self.get_dataset_from_foundry_into_duckdb(input.path_or_rid)
-        return 
+            if input.branch is None:
+                input.branch = self.branch_name
+            self.get_dataset_from_foundry_into_duckdb(
+                input.path_or_rid,
+                branch=input.branch,
+            )
+        return
 
     def collect_transform_outputs(self, transform: Transform[T]) -> None:
         return None
@@ -67,27 +75,33 @@ class FoundryManager:
     def get_dataset_from_foundry_into_duckdb(
         self,
         dataset_rid: str,
-        update: bool=False,
+        branch: str | None,
+        update: bool = False,
     ) -> bool:
+        branch_to_use = branch or self.branch_name
         identity = self.ctx.cached_foundry_client._get_dataset_identity(
-            dataset_rid, branch=self.branch_name
+            dataset_rid, branch=branch_to_use
         )
-        meta = self.get_meta_for_dataset(dataset_rid, branch=self.branch_name)
+        meta = self.get_meta_for_dataset(dataset_rid, branch=branch_to_use)
         if meta and not update:
             return False
-        
-        with self.ctx.cached_foundry_client.api.download_dataset_files_temporary(dataset_rid=dataset_rid, view=self.branch_name, ) as temp_output:
-            sanitized_dataset_name=sanitize(identity['dataset_path'])
-            sanitized_branch_name=sanitize(self.branch_name)
-            self.duckdb_conn.execute(f"CREATE SCHEMA IF NOT EXISTS fndry_{sanitized_branch_name}")
-            temp_dataset_spark = temp_output + '/spark/*'
+
+        with self.ctx.cached_foundry_client.api.download_dataset_files_temporary(
+            dataset_rid=dataset_rid,
+            view=branch_to_use,
+        ) as temp_output:
+            sanitized_dataset_name = sanitize(identity["dataset_path"])
+            sanitized_branch_name = sanitize(branch_to_use)
+            self.duckdb_conn.execute(
+                f"CREATE SCHEMA IF NOT EXISTS fndry_{sanitized_branch_name}"
+            )
+            temp_dataset_spark = Path(temp_output) / "spark/*"
             create_table_query = f"CREATE TABLE IF NOT EXISTS fndry_{sanitized_branch_name}.{sanitized_dataset_name} AS SELECT * FROM read_parquet('{temp_dataset_spark}')"
             self.duckdb_conn.execute(create_table_query)
             self.duckdb_conn.execute(
                 f"INSERT INTO meta.datasets_versions VALUES ('{dataset_rid}', '{self.branch_name}', '{identity['dataset_path']}', '{self.branch_name}', '{identity['dataset_path']}', '{datetime.now()}')"
             )
             return True
-
 
     def get_meta_for_dataset(self, dataset_rid: str, branch: str = "master"):
         res = self.duckdb_conn.query(

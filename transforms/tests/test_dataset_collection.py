@@ -5,6 +5,7 @@ from typing import Any
 import duckdb
 from foundry_dev_tools import Config, FoundryContext, JWTTokenProvider
 from pytest import MonkeyPatch
+
 from transforms.api import Input, Output, transform_df
 from transforms.manage import FoundryManager
 
@@ -27,9 +28,9 @@ def test_collecting_single_input(monkeypatch: MonkeyPatch):
     mngr = FoundryManager(duckdb_conn=duckdb.connect(':memory:'), ctx=FoundryContext(config=Config(), token_provider=JWTTokenProvider("test", jwt='test2')))
     
     mock_dataset_identity(monkeypatch, mngr.ctx.cached_foundry_client, "some_dataset_name")
-    mock_get_temp_files(monkeypatch, mngr.ctx.cached_foundry_client.api, "test_datasets/iris.parquet")
+    mock_get_temp_files(monkeypatch, mngr.ctx.cached_foundry_client.api, "test_datasets/iris")
     
-    mngr.get_dataset_from_foundry_into_duckdb('rid_1')
+    mngr.get_dataset_from_foundry_into_duckdb('rid_1', 'master')
     query_result: tuple[int] | None= mngr.duckdb_conn.query("SELECT count(*) FROM fndry_master.some_dataset_name").fetchone()
     assert query_result is not None
     assert query_result[0] > 0
@@ -38,7 +39,7 @@ def test_collecting_single_input(monkeypatch: MonkeyPatch):
 def test_transform_collection(monkeypatch: MonkeyPatch):
     mngr = FoundryManager(duckdb_conn=duckdb.connect(':memory:'), ctx=FoundryContext(config=Config(), token_provider=JWTTokenProvider("test", jwt='test2')))
     mock_dataset_identity(monkeypatch, mngr.ctx.cached_foundry_client, "some_dataset_name")
-    mock_get_temp_files(monkeypatch, mngr.ctx.cached_foundry_client.api, "test_datasets/iris.parquet")
+    mock_get_temp_files(monkeypatch, mngr.ctx.cached_foundry_client.api, "test_datasets/iris")
     
     from pyspark.sql import DataFrame
     @transform_df(Output("rid_2"), df=Input('rid_1'))

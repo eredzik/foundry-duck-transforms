@@ -10,6 +10,7 @@ from .check import Check
 class Input:
     path_or_rid: str
     checks: Check | None | list[Check] = None
+    branch: str | None = None
 
 
 @dataclass
