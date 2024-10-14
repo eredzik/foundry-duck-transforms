@@ -80,7 +80,8 @@ class FoundryManager:
             sanitized_dataset_name=sanitize(identity['dataset_path'])
             sanitized_branch_name=sanitize(self.branch_name)
             self.duckdb_conn.execute(f"CREATE SCHEMA IF NOT EXISTS fndry_{sanitized_branch_name}")
-            create_table_query = f"CREATE TABLE IF NOT EXISTS fndry_{sanitized_branch_name}.{sanitized_dataset_name} AS SELECT * FROM read_parquet('{temp_output}')"
+            temp_dataset_spark = temp_output + '/spark/*'
+            create_table_query = f"CREATE TABLE IF NOT EXISTS fndry_{sanitized_branch_name}.{sanitized_dataset_name} AS SELECT * FROM read_parquet('{temp_dataset_spark}')"
             self.duckdb_conn.execute(create_table_query)
             self.duckdb_conn.execute(
                 f"INSERT INTO meta.datasets_versions VALUES ('{dataset_rid}', '{self.branch_name}', '{identity['dataset_path']}', '{self.branch_name}', '{identity['dataset_path']}', '{datetime.now()}')"
