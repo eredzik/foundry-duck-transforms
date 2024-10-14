@@ -9,14 +9,14 @@ if TYPE_CHECKING:
 
 
 @dataclass
-class Expecatation(ABC):
+class Expectation(ABC):
     @abstractmethod
     def run(self, dataframe_to_verify: "DataFrame") -> None:
         raise NotImplementedError("Expectation has to be implemented")
 
 
 @dataclass
-class SchemaExpectation(Expecatation):
+class SchemaExpectation(Expectation):
     expected_schema: Mapping[str, "DataType"]
 
     def run(self, dataframe_to_verify: "DataFrame"):
@@ -33,7 +33,7 @@ class SchemaBuilder:
 
 
 @dataclass
-class PrimaryKeyExpectation(Expecatation):
+class PrimaryKeyExpectation(Expectation):
     pk: str
 
     def run(self, dataframe_to_verify: "DataFrame"):
@@ -47,7 +47,7 @@ class PrimaryKeyExpectation(Expecatation):
 
 
 @dataclass
-class ColExpectationIsIn(Expecatation):
+class ColExpectationIsIn(Expectation):
     col: str
     values_arr: list[str]
 
@@ -63,7 +63,7 @@ class ColExpectationIsIn(Expecatation):
 class ColExpectationBuilder:
     col: str
 
-    def is_in(self, *values_arr: str) -> Expecatation:
+    def is_in(self, *values_arr: str) -> Expectation:
         return ColExpectationIsIn(self.col, list(values_arr))
 
 
