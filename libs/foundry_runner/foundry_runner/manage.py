@@ -1,11 +1,13 @@
 import re
 from dataclasses import dataclass
 from datetime import datetime
-from typing import TypeVar
+from typing import TYPE_CHECKING, TypeVar
 
 import duckdb
 from foundry_dev_tools import FoundryContext
 
+if TYPE_CHECKING:
+    from transforms.api import Transform
 T = TypeVar("T")
 
 
@@ -80,12 +82,6 @@ class FoundryManager:
                 f"INSERT INTO meta.datasets_versions VALUES ('{dataset_rid}', '{self.branch_name}', '{identity['dataset_path']}', '{self.branch_name}', '{identity['dataset_path']}', '{datetime.now()}')"
             )
 
-
-
-
-        return self.ctx.cached_foundry_client.load_dataset(
-            dataset_rid, branch=self.branch_name
-        )
 
     def get_meta_for_dataset(self, dataset_rid: str, branch: str = "master"):
         res = self.duckdb_conn.query(
