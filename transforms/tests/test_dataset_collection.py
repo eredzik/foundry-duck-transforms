@@ -77,7 +77,7 @@ def mock_get_temp_files(
         else:
             raise BranchNotFoundError(info="not found branch")
 
-    monkeypatch.setattr(obj, "download_dataset_files_temporary", mock_get_temp_files)
+    monkeypatch.setattr(obj, "download_dataset_files", mock_get_temp_files)
 
 
 def test_collecting_single_input(monkeypatch: MonkeyPatch):
