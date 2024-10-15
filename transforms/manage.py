@@ -2,7 +2,7 @@ import re
 from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
-from typing import TypeVar
+from typing import TypedDict, TypeVar
 
 import duckdb
 from foundry_dev_tools import FoundryContext
@@ -49,7 +49,8 @@ class FoundryManager:
                 dataset_rid VARCHAR,
                 dataset_branch VARCHAR,
                 sanitized_rid VARCHAR,
-                sanitized_branch_name VARCHAR,
+                sanitized_branch_name VARCHAR,                 
+                dataset_name VARCHAR,
                 dataset_identity VARCHAR,
                 last_update DATETIME
             ) """)
@@ -62,8 +63,8 @@ class FoundryManager:
 
     def collect_transform_inputs(self, transform: Transform[T]) -> None:
         for input in transform.inputs.values():
-            if input.branch is None:
-                
+            # Input has pinned branch - don't try to fallback
+            if input.branch is not None:
                 self.get_dataset_from_foundry_into_duckdb(
                     input.path_or_rid,
                     branch=input.branch,
@@ -71,16 +72,31 @@ class FoundryManager:
                 return
             else:
                 try:
+                    # Try main branch name
                     self.get_dataset_from_foundry_into_duckdb(
                         input.path_or_rid,
-                        branch=input.branch,
+                        branch=self.branch_name,
                     )
+
                     return
                 except BranchNotFoundError as e:
                     for branch in self.fallback_branches:
-                        self.get_dataset_from_foundry_into_duckdb(
+                        # Try fallbacks and map back as view if found
+                        created_dataset = self.get_dataset_from_foundry_into_duckdb(
                             input.path_or_rid,
                             branch=branch,
+                        )
+                        self.create_view(
+                            src_schema=created_dataset["schema"],
+                            src_table=created_dataset["tablename"],
+                            target_schema=self.branch_name,
+                            target_table=created_dataset["tablename"],
+                        )
+                        self.create_view(
+                            src_schema=created_dataset["schema"],
+                            src_table=created_dataset["tablename"],
+                            target_schema=self.branch_name,
+                            target_table=sanitize(input.path_or_rid),
                         )
                         return
                     else:
@@ -96,31 +112,57 @@ class FoundryManager:
         dataset_rid: str,
         branch: str | None,
         update: bool = False,
-    ) -> bool:
+    ) -> "DbDatasetInfo":
         branch_to_use = branch or self.branch_name
         identity = self.ctx.cached_foundry_client._get_dataset_identity(
             dataset_rid, branch=branch_to_use
         )
         meta = self.get_meta_for_dataset(dataset_rid, branch=branch_to_use)
         if meta and not update:
-            return False
+            return DbDatasetInfo(schema=sanitize(branch_to_use), tablename=dataset_rid)
 
         with self.ctx.cached_foundry_client.api.download_dataset_files_temporary(
             dataset_rid=dataset_rid,
             view=branch_to_use,
         ) as temp_output:
-            sanitized_dataset_name = sanitize(identity["dataset_path"])
-            sanitized_branch_name = sanitize(branch_to_use)
+            sanitized_rid = sanitize(dataset_rid)
+            sanitized_dataset_name = sanitize(identity["dataset_path"].split("/")[-1])
+            sanitized_branch_name = "fndry_" + sanitize(branch_to_use)
             self.duckdb_conn.execute(
-                f"CREATE SCHEMA IF NOT EXISTS fndry_{sanitized_branch_name}"
+                f"CREATE SCHEMA IF NOT EXISTS {sanitized_branch_name}"
             )
             temp_dataset_spark = Path(temp_output) / "spark/*"
-            create_table_query = f"CREATE TABLE IF NOT EXISTS fndry_{sanitized_branch_name}.{sanitized_dataset_name} AS SELECT * FROM read_parquet('{temp_dataset_spark}')"
+            create_table_query = f"CREATE TABLE IF NOT EXISTS {sanitized_branch_name}.{sanitized_rid} AS SELECT * FROM read_parquet('{temp_dataset_spark}')"
             self.duckdb_conn.execute(create_table_query)
+
             self.duckdb_conn.execute(
-                f"INSERT INTO meta.datasets_versions VALUES ('{dataset_rid}', '{self.branch_name}', '{identity['dataset_path']}', '{self.branch_name}', '{identity['dataset_path']}', '{datetime.now()}')"
+                f"""INSERT INTO meta.datasets_versions by name (
+                SELECT
+                '{dataset_rid}' as dataset_rid,
+                '{branch_to_use}' as dataset_branch,
+                '{sanitized_rid}' as sanitized_rid,
+                '{sanitized_branch_name}' as sanitized_branch_name,
+                '{sanitized_rid}' as dataset_name,
+                '{identity['last_transaction_rid']}' as dataset_identity,
+                '{datetime.now()}' as last_update
             )
-            return True
+                """
+            )
+            self.create_view(
+                src_schema=sanitized_branch_name,
+                src_table=sanitized_rid,
+                target_schema=sanitized_branch_name,
+                target_table=sanitized_dataset_name,
+            )
+            
+            return DbDatasetInfo(schema=sanitized_branch_name, tablename=dataset_rid)
+
+    def create_view(
+        self, src_schema: str, src_table: str, target_schema: str, target_table: str
+    ):
+        self.duckdb_conn.execute(f"""
+            create or replace view {target_schema}.{target_table} as select * from {src_schema}.{src_table}
+            """)
 
     def get_meta_for_dataset(self, dataset_rid: str, branch: str = "master"):
         res = self.duckdb_conn.query(
@@ -142,4 +184,9 @@ class FoundryManager:
 
 
 def sanitize(branch_name: str) -> str:
-    return re.sub("[^a-zA-Z0-9_]", "_", branch_name)
+    return re.sub("[^a-zA-Z0-9_]", "_", branch_name).lower()
+
+
+class DbDatasetInfo(TypedDict):
+    schema: str
+    tablename: str
