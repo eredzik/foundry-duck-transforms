@@ -19,6 +19,7 @@ class DatasetVersion:
     dataset_branch: str
     sanitized_rid: str
     sanitized_branch_name: str
+    dataset_name:str
     dataset_identity: str
     last_update: datetime
 
@@ -170,6 +171,7 @@ class FoundryManager:
         )
         res1: (
             tuple[
+                str,
                 str,
                 str,
                 str,
