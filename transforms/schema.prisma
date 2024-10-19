@@ -1,0 +1,41 @@
+generator client {
+    provider             = "prisma-client-py"
+    interface            = "asyncio"
+    recursive_type_depth = 5
+}
+
+datasource db {
+    provider = "sqlite"
+    url      = env("DATABASE_URL")
+}
+
+model dataset {
+    id                 Int                  @id @default(autoincrement())
+    rid                String
+    dataset_identifier dataset_identifier[]
+    dataset_version    dataset_version[]
+}
+
+model dataset_identifier {
+    id          Int     @id @default(autoincrement())
+    rid_or_path String
+    dataset     dataset @relation(fields: [datasetid], references: [id])
+    datasetid   Int
+}
+
+model dataset_version {
+    id Int @id @default(autoincrement())
+
+    branch        data_branch @relation(fields: [data_branchId], references: [id])
+    dataset       dataset     @relation(fields: [datasetId], references: [id])
+    datasetId     Int
+    data_branchId Int
+}
+
+model data_branch {
+    id Int @id @default(autoincrement())
+
+    full_branch_name      String
+    sanitized_branch_name String
+    dataset_version       dataset_version[]
+}

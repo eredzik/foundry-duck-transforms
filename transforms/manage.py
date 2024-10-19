@@ -22,7 +22,7 @@ class DatasetVersion:
     dataset_branch: str
     sanitized_rid: str
     sanitized_branch_name: str
-    dataset_name:str
+    dataset_name: str
     dataset_identity: str
     last_update: datetime
 
@@ -73,7 +73,7 @@ class FoundryManager:
                     input.path_or_rid,
                     branch=input.branch,
                 )
-                
+
             else:
                 try:
                     # Try main branch name
@@ -82,7 +82,6 @@ class FoundryManager:
                         branch=self.branch_name,
                     )
 
-                    
                 except BranchNotFoundError as e:
                     for branch in self.fallback_branches:
                         # Try fallbacks and map back as view if found
@@ -107,22 +106,20 @@ class FoundryManager:
                         raise e
 
         return
-    
+
     @contextmanager
-    def download_file_to_temp_parquet(self,dataset_rid: str, branch: str ) :
+    def download_file_to_temp_parquet(self, dataset_rid: str, branch: str):
         temp = tempfile.mkdtemp(suffix=f"foundry_dev_tools-{dataset_rid}")
 
-        try: 
+        try:
             self.ctx.cached_foundry_client.api.download_dataset_files(
-                dataset_rid=dataset_rid,
-                view=branch,
-                output_directory=temp
+                dataset_rid=dataset_rid, view=branch, output_directory=temp
             )
             yield temp
         except FoundryAPIError:
             yield "TODO"
             print("TODO: Download dataset through sql")
-                
+
     def collect_transform_outputs(self, transform: Transform[T]) -> None:
         return None
 
@@ -139,7 +136,7 @@ class FoundryManager:
         meta = self.get_meta_for_dataset(dataset_rid, branch=branch_to_use)
         if meta and not update:
             return DbDatasetInfo(schema=sanitize(branch_to_use), tablename=dataset_rid)
-        
+
         with self.download_file_to_temp_parquet(
             dataset_rid=dataset_rid,
             branch=branch_to_use,
@@ -173,7 +170,7 @@ class FoundryManager:
                 target_schema=sanitized_branch_name,
                 target_table=sanitized_dataset_name,
             )
-            
+
             return DbDatasetInfo(schema=sanitized_branch_name, tablename=dataset_rid)
 
     def create_view(
