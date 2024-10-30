@@ -1,8 +1,15 @@
+import tempfile
 from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
 
 import duckdb
+from foundry_dev_tools import FoundryContext
+from foundry_dev_tools.errors.dataset import BranchNotFoundError
+from foundry_dev_tools.errors.meta import FoundryAPIError
+
+from transforms.prisma_client import Prisma
+from transforms.prisma_client.cli import prisma as cli
 
 
 @dataclass
@@ -16,100 +23,82 @@ class DatasetVersion:
     last_update: datetime
 
 
-@dataclass()
 class DataManager:
-    connection_url: str | Path = ":memory:"
-
-    def __post_init__(self):
-        self.conn = duckdb.connect(database=self.connection_url)
-        self.conn.execute("""
-            CREATE TABLE IF NOT EXISTS datasets_versions (
-                identifier VARCHAR,
-                data_branch VARCHAR,
-                dataset_schema VARCHAR,
-                dataset_tablename VARCHAR,
-                last_update DATETIME
-            ) """)
-
-    def load_parquet_into_database(
+    def __init__(
         self,
-        identifiers: list[str],
-        parquet_path: Path | str,
+        metadata_path: Path = Path.home() / ".fndry_duck" / "meta.db",
+        storage_dir: Path = Path.home() / ".fndry_duck" / "store",
+        config_dir: Path = Path.home() / ".fndry_duck",
+        ctx: FoundryContext | None = None,
+    ):
+        self.metadata_path = metadata_path
+        self.storage_dir = storage_dir
+        self.config_dir = config_dir
+        self.ctx = ctx or FoundryContext()
+        # cli.run(
+        #     ["migrate", "deploy", f'--schema={Path(__file__).parent/'schema.prisma'}'],
+        #     env={"DATABASE_URL": self.metadata_path},
+        # )
+        cli.run(
+            ["db", "push", f'--schema={Path(__file__).parent/'schema.prisma'}'],
+            env={"DATABASE_URL": f"file:{str(self.metadata_path)}"},
+        )
+
+    def reset_meta(self):
+        self.metadata_path.unlink(missing_ok=True)
+
+        cli.run(
+            ["db", "push", f'--schema={Path(__file__).parent/'schema.prisma'}'],
+            env={"DATABASE_URL": f"file:{str(self.metadata_path)}"},
+        )
+
+    async def __aenter__(self):
+        self.prisma = Prisma(datasource={"url": f"file:{str(self.metadata_path)}"})
+        await self.prisma.connect()
+        return self
+
+    async def __aexit__(self, exc_type, exc_value, traceback):
+        await self.prisma.disconnect()
+
+    async def load_latest_parquet_into_database(
+        self,
+        dataset_rid_or_path: str,
         branch: str,
-        tablename: str,
     ):
-        self.conn
-
-    def load_dataset_into_database(
-        self,
-        from_specifier: str,
-        identifiers: list[str],
-        data_branch: str,
-        schema: str,
-        tablename: str,
-    ):
-        self.create_schema_if_not_exists(schema)
-        create_table_query = f"""
-        CREATE TABLE IF NOT EXISTS {schema}.{tablename} AS
-        SELECT *
-        FROM {from_specifier}"""
-        self.conn.execute(create_table_query)
-        for identifier in identifiers:
-            self.mark_in_metadata(
-                identifier=identifier,
-                data_branch=data_branch,
-                dataset_schema=schema,
-                dataset_tablename=tablename,
+        dataset = await self.prisma.dataset_identifier.find_first(
+            where={"rid_or_path": dataset_rid_or_path}, include={"dataset": True}
+        )
+        if dataset:
+            version = await self.prisma.dataset_version.find_first(
+                where={
+                    "branch": {"is": {"full_branch_name": "branch"}},
+                    "datasetId": dataset.id,
+                },
+                order={"data_identity_date": "desc"},
             )
 
-    def mark_in_metadata(
-        self,
-        identifier: str,
-        data_branch: str,
-        dataset_schema: str,
-        dataset_tablename: str,
-    ):
-        self.conn.execute(
-            f"""INSERT INTO meta.datasets_versions by name (
-                SELECT
-                '{identifier}' as identifier,
-                '{data_branch}' as data_branch,
-                '{dataset_schema}' as dataset_schema,
-                '{dataset_tablename}' as dataset_tablename,
+        identity = self.ctx.cached_foundry_client._get_dataset_identity(
+            dataset_path_or_rid=dataset_rid_or_path, branch=branch
+        )
+        identity_id = identity["last_transaction_rid"]
+        # No version found or is outdated and there is some version available
+        if identity_id is None:
+            return "No data"
+        if not version or (identity_id != version.data_identity_id):
+            temp = tempfile.mkdtemp(
+                suffix=f"foundry_dev_tools-{identity['last_transaction_rid']}"
             )
-                """
-        )
 
-    def create_schema_if_not_exists(self, schema: str):
-        self.conn.execute(f"CREATE SCHEMA IF NOT EXISTS {schema}")
+            try:
+                self.ctx.cached_foundry_client.api.download_dataset_files(
+                    dataset_rid=identity_id,
+                    view=branch,
+                    output_directory=temp,
+                )
+                return temp
+            except FoundryAPIError:
+                print("TODO: Download dataset through sql")
+                return "TODO"
 
-    def create_view(
-        self, src_schema: str, src_table: str, target_schema: str, target_table: str
-    ):
-        self.conn.execute(f"""
-            create or replace view {target_schema}.{target_table} as
-            select * from {src_schema}.{src_table}
-        """)
-
-    def get_table_by_identifier_branch(self, data_branch: str, identifier: str):
-        res = self.conn.query(
-            f"""SELECT *
-            FROM meta.datasets_versions
-            WHERE
-                dataset_rid = '{dataset_rid}' AND
-                dataset_branch = '{branch}'
-            """
-        )
-        res1: (
-            tuple[
-                str,
-                str,
-                str,
-                str,
-                str,
-                datetime,
-            ]
-            | None
-        ) = res.fetchone()
-        if res1:
-            return DatasetVersion(*res1)
+        else:
+            return identity_id
