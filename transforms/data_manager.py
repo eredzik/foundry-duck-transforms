@@ -3,13 +3,14 @@ from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
 
+import alembic.config
 import duckdb
 from foundry_dev_tools import FoundryContext
 from foundry_dev_tools.errors.dataset import BranchNotFoundError
 from foundry_dev_tools.errors.meta import FoundryAPIError
+from sqlmodel import Session, create_engine, select
 
-from transforms.prisma_client import Prisma
-from transforms.prisma_client.cli import prisma as cli
+from .models import DatasetIdentifier
 
 
 @dataclass
@@ -31,6 +32,8 @@ class DataManager:
         config_dir: Path = Path.home() / ".fndry_duck",
         ctx: FoundryContext | None = None,
     ):
+        self._engine = create_engine(f"sqlite:///{str(metadata_path)}")
+        self.session = Session(self._engine)
         self.metadata_path = metadata_path
         self.storage_dir = storage_dir
         self.config_dir = config_dir
@@ -39,32 +42,34 @@ class DataManager:
         #     ["migrate", "deploy", f'--schema={Path(__file__).parent/'schema.prisma'}'],
         #     env={"DATABASE_URL": self.metadata_path},
         # )
-        cli.run(
-            ["db", "push", f'--schema={Path(__file__).parent/'schema.prisma'}'],
-            env={"DATABASE_URL": f"file:{str(self.metadata_path)}"},
-        )
+
+        alembicArgs = [
+            '--raiseerr',
+            'upgrade', 'head',
+        ]
+        alembic.config.main(argv=alembicArgs)
 
     def reset_meta(self):
         self.metadata_path.unlink(missing_ok=True)
 
-        cli.run(
-            ["db", "push", f'--schema={Path(__file__).parent/'schema.prisma'}'],
-            env={"DATABASE_URL": f"file:{str(self.metadata_path)}"},
-        )
+        alembicArgs = [
+            '--raiseerr',
+            'upgrade', 'head',
+        ]
+        alembic.config.main(argv=alembicArgs)
+        
+        
+        
 
-    async def __aenter__(self):
-        self.prisma = Prisma(datasource={"url": f"file:{str(self.metadata_path)}"})
-        await self.prisma.connect()
-        return self
 
-    async def __aexit__(self, exc_type, exc_value, traceback):
-        await self.prisma.disconnect()
+        
 
     async def load_latest_parquet_into_database(
         self,
         dataset_rid_or_path: str,
         branch: str,
     ):
+        self.session.exec(select(DatasetIdentifier).where(DatasetIdentifier.rid_or_path == dataset_rid_or_path))
         dataset = await self.prisma.dataset_identifier.find_first(
             where={"rid_or_path": dataset_rid_or_path}, include={"dataset": True}
         )

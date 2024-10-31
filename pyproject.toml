@@ -19,7 +19,13 @@ classifiers = [
     "Operating System :: Microsoft :: Windows",
     "Topic :: Scientific/Engineering :: Information Analysis",
 ]
-dependencies = ["duckdb", 'sqlframe', 'foundry-dev-tools']
+dependencies = [
+    "duckdb",
+    'sqlframe',
+    'foundry-dev-tools',
+    'sqlmodel',
+    'alembic',
+]
 version = "0.1.0"
 
 [build-system]
