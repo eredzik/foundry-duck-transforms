@@ -3,9 +3,8 @@ import sys
 
 from sqlframe import activate
 
-activate()
-
-from foundry_dev_tools import FoundryContext
+activate(engine="duckdb")
+from foundry_dev_tools import Config, FoundryContext, JWTTokenProvider
 
 from transforms.api.transform_df import Transform
 from transforms.runner.data_source.foundry_source import FoundrySource
@@ -35,7 +34,12 @@ def main():
         return
 
     TransformRunner(fallback_branches=["dev"]).exec_transform(
-        list(transforms.values())[0], data_sourcer=FoundrySource(ctx=FoundryContext())
+        list(transforms.values())[0],
+        data_sourcer=FoundrySource(
+            ctx=FoundryContext(
+                config=Config(), token_provider=JWTTokenProvider("test", jwt="test2")
+            )
+        ),
     )
 
 

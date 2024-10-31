@@ -1,4 +1,4 @@
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 
 from foundry_dev_tools.errors.dataset import BranchNotFoundError
 
@@ -8,7 +8,7 @@ from transforms.runner.data_source.base import DataSource
 
 @dataclass
 class TransformRunner:
-    fallback_branches: list[str] = []
+    fallback_branches: list[str] = field(default_factory=list)
 
     def exec_transform(self, transform: Transform, data_sourcer: DataSource) -> None:
         sources = {}

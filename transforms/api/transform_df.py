@@ -1,6 +1,7 @@
 from dataclasses import dataclass
 from typing import Callable, Concatenate, Generic, ParamSpec
 
+import pyspark
 from pyspark.sql import DataFrame
 
 from .check import Check
