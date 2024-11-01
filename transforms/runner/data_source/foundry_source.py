@@ -21,9 +21,9 @@ class FoundrySource(DataSource):
             inferred_format = _infer_dataset_format(self.ctx.cached_foundry_client.cache.get_cache_dir(), dataset_identity)
             path = self.ctx.cached_foundry_client.cache._get_storage_location(dataset_identity, inferred_format)
             if inferred_format == "parquet":
-                return 
+                return self.session.read.parquet(str(path.joinpath("spark", "*")))
+            raise NotImplementedError(f"Format {inferred_format} is not supported")
                 
-            return self.session.read.parquet(str(path.joinpath("spark", "*")))
         except FileNotFoundError as exc:
             msg = f"{dataset_identity}"
             raise KeyError(msg) from exc
