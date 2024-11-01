@@ -1,7 +1,7 @@
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any, Callable, Concatenate, Literal, ParamSpec
 
-from pyspark.sql import DataFrame
+from pyspark.sql import DataFrame, SparkSession
 
 from .external.systems import ExternalSystemReq
 
@@ -23,7 +23,10 @@ class Output:
     path_or_rid: str
     checks: Check | None | list[Check] = None
 
-
+@dataclass
+class Context:
+    session: SparkSession
+    is_incremental: bool = False
 class Transform:
     def __init__(
         self,
@@ -32,7 +35,7 @@ class Transform:
         transform: Callable[..., Any],
         multi_outputs: dict[str, "OutputDf"] | None = None,
         incremental_opts: "IncrementalTransformOpts | None" = None,
-        external_systems: list["ExternalSystemReq"] | None = None,
+        external_systems: dict[str, "ExternalSystemReq"] | None = None,
     ):
         self.inputs = inputs
         self.outputs = outputs

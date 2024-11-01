@@ -12,6 +12,7 @@ from transforms.runner.data_source.base import DataSource
 class TransformRunner:
     fallback_branches: list[str] = field(default_factory=list)
     output_dir: Path = Path.home() / ".fndry_duck" / "output"
+    secrets_config_location :Path =  Path.home() / ".fndry_duck" / "secrets"
 
     def __post_init__(self):
         self.output_dir.mkdir(parents=True, exist_ok=True)
@@ -27,6 +28,8 @@ class TransformRunner:
                 input.path_or_rid, branches=branches
             )
         if transform.external_systems is not None:
+            for external_system in transform.external_systems:
+                transform.external_systems[external_system].secrets_config_location = str(self.secrets_config_location)
             raise NotImplementedError("External systems are not yet implemented")
         if transform.multi_outputs is not None:
             impl_multi_outputs = {}
