@@ -17,7 +17,7 @@ class Expectation(ABC):
 
 @dataclass
 class SchemaExpectation(Expectation):
-    expected_schema: Mapping[str, "DataType"]
+    expected_schema: Mapping[str, "DataType"]  | DataType
 
     def run(self, dataframe_to_verify: "DataFrame"):
         diff = set(dataframe_to_verify.columns).difference(self.expected_schema)
