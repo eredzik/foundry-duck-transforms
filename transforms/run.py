@@ -1,10 +1,12 @@
 import importlib.util
 import sys
+from typing import Any
 
 from sqlframe import activate
 
 activate(engine="duckdb")
 from foundry_dev_tools import Config, FoundryContext, JWTTokenProvider
+from pyspark.sql import SparkSession
 
 from transforms.api.transform_df import Transform
 from transforms.runner.data_source.foundry_source import FoundrySource
@@ -21,7 +23,7 @@ def import_from_path(module_name: str, file_path: str):
 
 def main():
     mod = import_from_path("transform", sys.argv[1])
-    transforms = {}
+    transforms: dict[str, Transform| Any] = {}
     for name, item in mod.__dict__.items():
         if isinstance(item, Transform):
             transforms[name] = item
@@ -32,14 +34,10 @@ def main():
     if len(transforms) == 0:
         print("file has no transforms")
         return
-
+    sess: SparkSession = SparkSession.builder.appName("test").getOrCreate() # type: ignore
     TransformRunner(fallback_branches=["dev"]).exec_transform(
         list(transforms.values())[0],
-        data_sourcer=FoundrySource(
-            ctx=FoundryContext(
-                config=Config(), token_provider=JWTTokenProvider("test", jwt="test2")
-            )
-        ),
+        data_sourcer=FoundrySource(ctx=FoundryContext(), session=sess),
     )
 
 

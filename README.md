@@ -1,5 +1,9 @@
 # Transforms package
 
+## Foundry dev tools configuration
+
+See [here](https://emdgroup.github.io/foundry-dev-tools/configuration.html)
+
 ## Vscode launch.json config
 
 ```json

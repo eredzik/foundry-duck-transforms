@@ -1,7 +1,6 @@
 from dataclasses import dataclass
-from typing import Callable, Concatenate, Generic, ParamSpec
+from typing import Callable, Concatenate, ParamSpec
 
-import pyspark
 from pyspark.sql import DataFrame
 
 from .check import Check
@@ -20,14 +19,13 @@ class Output:
     checks: Check | None | list[Check] = None
 
 
-TransformParamSpec = ParamSpec("TransformParamSpec")
 
 
 @dataclass
-class Transform(Generic[TransformParamSpec]):
+class Transform():
     inputs: dict[str, Input]
     outputs: list[Output]
-    transform: Callable[TransformParamSpec, DataFrame]
+    transform: Callable[..., DataFrame]
 
 
 DecoratorParamSpec = ParamSpec(
