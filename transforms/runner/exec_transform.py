@@ -7,10 +7,13 @@ from pyspark.sql import DataFrame
 from transforms.api.transform_df import OutputDf, Transform
 from transforms.runner.data_source.base import DataSource
 
+from .exec_check import execute_check
+
 
 @dataclass
 class TransformRunner:
     fallback_branches: list[str] = field(default_factory=list)
+    omit_checks: bool = False
     output_dir: Path = Path.home() / ".fndry_duck" / "output"
     secrets_config_location :Path =  Path.home() / ".fndry_duck" / "secrets"
 
@@ -44,6 +47,9 @@ class TransformRunner:
                     if mode == "append":
                         raise NotImplementedError()
                     else:
+                        if not self.omit_checks:
+                            for check in output.checks: 
+                                execute_check(res, check)
                         df.write.parquet(f"{self.output_dir}/{output.path_or_rid}", mode="overwrite")
                     
                 impl_multi_outputs[argname] = OutputDf(on_dataframe_req=on_dataframe_req, on_dataframe_write=on_dataframe_write)
@@ -54,6 +60,9 @@ class TransformRunner:
         res = transform.transform(**sources)
         if transform.multi_outputs is None:
             res: DataFrame
+            if not self.omit_checks:
+                for check in transform.outputs["output"].checks:
+                    execute_check(res, check)
             res.write.parquet(
                 f"{self.output_dir}/{transform.outputs['output'].path_or_rid}", mode="overwrite"
             )

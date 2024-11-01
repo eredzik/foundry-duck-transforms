@@ -18,10 +18,17 @@ class Input:
     branch: str | None = None
 
 
-@dataclass
+
 class Output:
-    path_or_rid: str
-    checks: Check | None | list[Check] = None
+    def __init__(self, path_or_rid: str, checks: Check | None | list[Check] = None):
+        self.path_or_rid = path_or_rid
+        if checks is None:
+            checks = []
+        elif isinstance(checks, Check):
+            checks = [checks]
+        else:
+            self.checks = checks
+        
 
 
 @dataclass
