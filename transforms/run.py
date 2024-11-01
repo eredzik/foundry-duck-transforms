@@ -35,7 +35,8 @@ def main():
         print("file has no transforms")
         return
     sess: SparkSession = SparkSession.builder.appName("test").getOrCreate() # type: ignore
-    TransformRunner(fallback_branches=["dev"]).exec_transform(
+    branches = sys.argv[2].split(",")
+    TransformRunner(fallback_branches=branches).exec_transform(
         list(transforms.values())[0],
         data_sourcer=FoundrySource(ctx=FoundryContext(), session=sess),
     )

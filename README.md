@@ -15,8 +15,7 @@ See [here](https://emdgroup.github.io/foundry-dev-tools/configuration.html)
       "type": "debugpy",
       "request": "launch",
       "module": "transforms.run",
-      "args": ["${file}"],
-
+      "args": ["${file}", "dev,master"],
       "console": "integratedTerminal"
     }
   ]

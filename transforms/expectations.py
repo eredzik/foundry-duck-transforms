@@ -32,15 +32,17 @@ class SchemaBuilder:
     equals = SchemaExpectation
 
 
-@dataclass
+
 class PrimaryKeyExpectation(Expectation):
-    pk: str
+    
+    def __init__(self, *pk:str):
+        self.pk = pk
 
     def run(self, dataframe_to_verify: "DataFrame"):
         from pyspark.sql import functions as F
 
         res = dataframe_to_verify.select(
-            (F.count_distinct(self.pk) != F.count(self.pk)).alias("result"),
+            (F.count_distinct(*self.pk) != F.count("*")).alias("result"),
         ).collect()
         if not res[0][0]:
             raise AssertionError("Primary key is not unique")
