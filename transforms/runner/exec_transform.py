@@ -26,3 +26,5 @@ class TransformRunner:
                     print(
                         f"Branch not found for dataset [{argname}={input.path_or_rid}]"
                     )
+        res = transform.transform(**sources)
+        res.write.parquet(f"output/{transform.outputs[0].path_or_rid}")
