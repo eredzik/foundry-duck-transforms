@@ -9,7 +9,7 @@ class Source:
     external_system_rid: str
     secrets_config_location: str | None = None
 
-    def get_secret(self, key: str)->str:
+    def get_secret(self, secret_name: str)->str:
         if self.secrets_config_location is None:
             raise ValueError("No secrets config location specified")
         with open(self.secrets_config_location, 'r') as f:
@@ -17,7 +17,7 @@ class Source:
             system= secrets.get(self.external_system_rid)
             if not system:
                 raise ValueError(f"No secrets for external system {self.external_system_rid}")
-            key = system.get(key)
+            key = system.get(secret_name)
             if not key:
                 raise ValueError(f"No secret for key {key} in external system {self.external_system_rid}")
             return key
