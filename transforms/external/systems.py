@@ -1,13 +1,13 @@
 import json
 from dataclasses import dataclass
 
-from ..transform_df import Transform
+from transforms.api.transform_df import Transform
 
 
 @dataclass
 class Source:
     external_system_rid: str
-    secrets_config_location: str | None
+    secrets_config_location: str | None = None
 
     def get_secret(self, key: str)->str:
         if self.secrets_config_location is None:

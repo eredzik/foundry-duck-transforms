@@ -3,7 +3,7 @@ from typing import TYPE_CHECKING, Any, Callable, Concatenate, Literal, ParamSpec
 
 from pyspark.sql import DataFrame, SparkSession
 
-from .external.systems import Source
+from transforms.external.systems import Source
 
 if TYPE_CHECKING:
     from .incremental_transform import IncrementalTransformOpts
