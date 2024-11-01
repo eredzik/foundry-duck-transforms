@@ -3,7 +3,7 @@ from .configure import configure
 from .incremental_transform import incremental
 from .transform_df import Input, Output, Transform, transform, transform_df
 
-__all__= [
+__all__ = [
     "Input",
     "Output",
     "Transform",
