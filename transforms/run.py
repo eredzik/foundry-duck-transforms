@@ -1,5 +1,6 @@
 import importlib.util
 import sys
+from pathlib import Path
 from typing import Any
 
 from sqlframe import activate
@@ -23,7 +24,19 @@ if __name__ == "__main__":
         )  # Execute the module in its own namespace
         return module
 
+    def traverse_to_setup_and_add_to_path(
+        module_name: str
+    ) ->None:
+        parent = Path(module_name).parent
+        files = parent.glob("setup.py")
+        if len(list(files)) == 0: 
+            return traverse_to_setup_and_add_to_path(str(parent.parent))
+        else:
+            sys.path.append(str(parent))
+            return
+        
     def main():
+        traverse_to_setup_and_add_to_path(sys.argv[1])
         mod = import_from_path("transform", sys.argv[1])
         transforms: dict[str, Transform | Any] = {}
         for name, item in mod.__dict__.items():
