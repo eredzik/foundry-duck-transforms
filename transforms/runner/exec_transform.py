@@ -1,9 +1,10 @@
 from dataclasses import dataclass, field
 from pathlib import Path
+from typing import Literal
 
-from foundry_dev_tools.errors.dataset import BranchNotFoundError
+from pyspark.sql import DataFrame
 
-from transforms.api.transform_df import Transform
+from transforms.api.transform_df import OutputDf, Transform
 from transforms.runner.data_source.base import DataSource
 
 
@@ -14,21 +15,47 @@ class TransformRunner:
 
     def __post_init__(self):
         self.output_dir.mkdir(parents=True, exist_ok=True)
+
     def exec_transform(self, transform: Transform, data_sourcer: DataSource) -> None:
         sources = {}
+
         for argname, input in transform.inputs.items():
             branches = [
                 b for b in ([input.branch] + self.fallback_branches) if b is not None
             ]
-            for branch in branches:
-                try:
-                    sources[argname] = data_sourcer.download_dataset(
-                        input.path_or_rid, branch=branch
-                    )
-                    break
-                except BranchNotFoundError:
-                    print(
-                        f"Branch not found for dataset [{argname}={input.path_or_rid}]"
-                    )
+            sources[argname] = data_sourcer.download_for_branches(
+                input.path_or_rid, branches=branches
+            )
+        if transform.multi_outputs is not None:
+            impl_multi_outputs = {}
+            for argname, output in transform.outputs.items():
+                def on_dataframe_req(mode: Literal["current", "previous"]) -> DataFrame:
+                    if mode == "current":
+                        return data_sourcer.download_for_branches(
+                output.path_or_rid, branches=self.fallback_branches)
+                    else:
+                        raise NotImplementedError()
+                def on_dataframe_write(df: DataFrame, mode: Literal["append", "replace"]):
+                    if mode == "append":
+                        raise NotImplementedError()
+                    else:
+                        df.write.parquet(f"{self.output_dir}/{output.path_or_rid}", mode="overwrite")
+                    
+                impl_multi_outputs[argname] = OutputDf(on_dataframe_req=on_dataframe_req, on_dataframe_write=on_dataframe_write)
+            transform.multi_outputs = impl_multi_outputs
+            
+        
+
         res = transform.transform(**sources)
-        res.write.parquet(f"{self.output_dir}/{transform.outputs[0].path_or_rid}", mode='overwrite')
+        if transform.multi_outputs is None:
+            res: DataFrame
+            res.write.parquet(
+                f"{self.output_dir}/{transform.outputs['output'].path_or_rid}", mode="overwrite"
+            )
+        else:
+            if transform.incremental_opts is not None:
+                raise NotImplementedError("Not yet implemented saving for incremental dataset")
+            else:
+                print("Finished transform successfully")
+                return
+                

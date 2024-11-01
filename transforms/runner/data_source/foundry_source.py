@@ -1,11 +1,12 @@
 from dataclasses import dataclass
 
 from foundry_dev_tools import FoundryContext
+from foundry_dev_tools.errors.dataset import BranchNotFoundError
 from foundry_dev_tools.utils.caches.spark_caches import (
     _infer_dataset_format,
     _validate_cache_key,
 )
-from pyspark.sql import SparkSession
+from pyspark.sql import DataFrame, SparkSession
 
 from transforms.runner.data_source.base import DataSource
 
@@ -28,4 +29,21 @@ class FoundrySource(DataSource):
             msg = f"{dataset_identity}"
             raise KeyError(msg) from exc
 
+    def download_for_branches(self, dataset_path_or_rid: str, branches: list[str]):
         
+            
+        for branch in branches:
+            try:
+                return self.download_dataset(
+                    dataset_path_or_rid, branch=branch
+                )
+                
+            except BranchNotFoundError:
+                print(
+                    f"Branch not found for dataset [{dataset_path_or_rid}]"
+                )
+        raise Exception("DatasetNotFound")
+    
+    def get_last_transaction(self, dataset_path_or_rid: str, branches: list[str])->DataFrame:
+        
+        raise NotImplementedError()

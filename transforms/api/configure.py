@@ -1,10 +1,12 @@
+from typing import Any
+
 from transforms.api.transform_df import Transform
 
 
 def configure(
     profile: str | list[str] | None = None,
-    *args,
-    **kwargs
+    *args: Any,
+    **kwargs: Any
 ):
     def _configure(transform: Transform):
         return transform

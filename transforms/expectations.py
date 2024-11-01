@@ -20,11 +20,18 @@ class SchemaExpectation(Expectation):
     expected_schema: Mapping[str, "DataType"]  | DataType
 
     def run(self, dataframe_to_verify: "DataFrame"):
-        diff = set(dataframe_to_verify.columns).difference(self.expected_schema)
-        if len(diff) > 0:
-            raise AssertionError(
-                f"Schema of the dataframe is not as expected. Missing columns: {diff}"
-            )
+        if isinstance(self.expected_schema, DataType):
+            res = self.expected_schema == dataframe_to_verify.schema
+            if not res:
+                raise AssertionError(
+                    f"Schema of the dataframe is not as expected. Expected: [{self.expected_schema}] Actual: [{dataframe_to_verify.schema}]"
+                )
+        else :
+            diff = set(dataframe_to_verify.columns).difference(self.expected_schema)
+            if len(diff) > 0:
+                raise AssertionError(
+                    f"Schema of the dataframe is not as expected. Missing columns: {diff}"
+                )
 
 
 @dataclass
