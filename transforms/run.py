@@ -9,7 +9,7 @@ activate(engine="duckdb")
 
 if __name__ == "__main__":
     from foundry_dev_tools import FoundryContext
-    from pyspark.sql import SparkSession
+    from pyspark.sql import DataFrame, SparkSession
 
     from transforms.api.transform_df import Transform
     from transforms.runner.data_source.foundry_source import FoundrySource
@@ -50,7 +50,7 @@ if __name__ == "__main__":
             print("file has no transforms")
             return
         sess: SparkSession = SparkSession.builder.appName("test").getOrCreate()  # type: ignore
-
+        DataFrame.rdd.mapPartitions()
         branches = sys.argv[2].split(",")
         TransformRunner(fallback_branches=branches).exec_transform(
             list(transforms.values())[0],

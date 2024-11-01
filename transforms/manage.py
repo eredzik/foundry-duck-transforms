@@ -65,7 +65,7 @@ class FoundryManager:
             )
         self.duckdb_conn.commit()
 
-    def collect_transform_inputs(self, transform: Transform[T]) -> None:
+    def collect_transform_inputs(self, transform: Transform) -> None:
         for input in transform.inputs.values():
             # Input has pinned branch - don't try to fallback
             if input.branch is not None:
@@ -123,7 +123,7 @@ class FoundryManager:
             yield "TODO"
             print("TODO: Download dataset through sql")
                 
-    def collect_transform_outputs(self, transform: Transform[T]) -> None:
+    def collect_transform_outputs(self, transform: Transform) -> None:
         return None
 
     def get_dataset_from_foundry_into_duckdb(
