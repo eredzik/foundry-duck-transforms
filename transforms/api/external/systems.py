@@ -5,7 +5,7 @@ from ..transform_df import Transform
 
 
 @dataclass
-class ExternalSystemReq:
+class Source:
     external_system_rid: str
     secrets_config_location: str | None
 
@@ -23,7 +23,7 @@ class ExternalSystemReq:
             return key
         raise NotImplementedError()
 
-def external_systems(**kwargs: ExternalSystemReq):
+def external_systems(**kwargs: Source):
     def _external_systems(transform: Transform):
         transform.external_systems = kwargs
         return transform

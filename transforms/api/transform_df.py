@@ -3,7 +3,7 @@ from typing import TYPE_CHECKING, Any, Callable, Concatenate, Literal, ParamSpec
 
 from pyspark.sql import DataFrame, SparkSession
 
-from .external.systems import ExternalSystemReq
+from .external.systems import Source
 
 if TYPE_CHECKING:
     from .incremental_transform import IncrementalTransformOpts
@@ -23,10 +23,13 @@ class Output:
     path_or_rid: str
     checks: Check | None | list[Check] = None
 
+
 @dataclass
 class Context:
     session: SparkSession
     is_incremental: bool = False
+
+
 class Transform:
     def __init__(
         self,
@@ -35,7 +38,7 @@ class Transform:
         transform: Callable[..., Any],
         multi_outputs: dict[str, "OutputDf"] | None = None,
         incremental_opts: "IncrementalTransformOpts | None" = None,
-        external_systems: dict[str, "ExternalSystemReq"] | None = None,
+        external_systems: dict[str, "Source"] | None = None,
     ):
         self.inputs = inputs
         self.outputs = outputs
@@ -43,7 +46,6 @@ class Transform:
         self.multi_outputs = multi_outputs
         self.incremental_opts = incremental_opts
         self.external_systems = external_systems
-
 
 
 DecoratorParamSpec = ParamSpec(
@@ -69,10 +71,11 @@ class OutputDf:
     ):
         self.on_dataframe_req = on_dataframe_req
         self.on_dataframe_write = on_dataframe_write
-        self.mode_state: Literal['replace', "append"] = "replace" 
+        self.mode_state: Literal["replace", "append"] = "replace"
 
     def dataframe(self, mode: Literal["current", "previous"]) -> DataFrame:
         return self.on_dataframe_req(mode)
+
     def mode(self, mode: Literal["append", "replace"]):
         self.mode_state = mode
         return self
@@ -92,8 +95,7 @@ def transform(**kwargs: Input | Output):
 
             if isinstance(arg, Output):
                 outputs[key] = arg
-                
-        
+
         def transformed_transform(**kwargs: DataFrame) -> None:
             new_kwargs = {key: InputDf(df=value) for key, value in kwargs.items()}
             return transform(**new_kwargs)
