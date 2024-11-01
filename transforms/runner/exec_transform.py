@@ -26,6 +26,8 @@ class TransformRunner:
             sources[argname] = data_sourcer.download_for_branches(
                 input.path_or_rid, branches=branches
             )
+        if transform.external_systems is not None:
+            raise NotImplementedError("External systems are not yet implemented")
         if transform.multi_outputs is not None:
             impl_multi_outputs = {}
             for argname, output in transform.outputs.items():

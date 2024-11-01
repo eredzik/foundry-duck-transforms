@@ -3,6 +3,8 @@ from typing import TYPE_CHECKING, Any, Callable, Concatenate, Literal, ParamSpec
 
 from pyspark.sql import DataFrame
 
+from .external.systems import ExternalSystemReq
+
 if TYPE_CHECKING:
     from .incremental_transform import IncrementalTransformOpts
 
@@ -30,12 +32,14 @@ class Transform:
         transform: Callable[..., Any],
         multi_outputs: dict[str, "OutputDf"] | None = None,
         incremental_opts: "IncrementalTransformOpts | None" = None,
+        external_systems: list["ExternalSystemReq"] | None = None,
     ):
         self.inputs = inputs
         self.outputs = outputs
         self.transform = transform
         self.multi_outputs = multi_outputs
         self.incremental_opts = incremental_opts
+        self.external_systems = external_systems
 
 
 
