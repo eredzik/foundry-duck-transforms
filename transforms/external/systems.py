@@ -1,7 +1,10 @@
 import json
 from dataclasses import dataclass
+from typing import TYPE_CHECKING
 
-from transforms.api.transform_df import Transform
+if TYPE_CHECKING:
+
+    from transforms.api.transform_df import Transform
 
 
 @dataclass
@@ -24,7 +27,7 @@ class Source:
         raise NotImplementedError()
 
 def external_systems(**kwargs: Source):
-    def _external_systems(transform: Transform):
+    def _external_systems(transform: "Transform"):
         transform.external_systems = kwargs
         return transform
     return _external_systems
