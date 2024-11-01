@@ -30,10 +30,9 @@ if __name__ == "__main__":
         parent = Path(module_name).parent
         files = parent.glob("setup.py")
         if len(list(files)) == 0: 
-            return traverse_to_setup_and_add_to_path(str(parent.parent))
+            return traverse_to_setup_and_add_to_path(str(parent))
         else:
-            
-            sys.path.append(module_name)
+            sys.path.append(str(parent))
             return
         
     def main():
