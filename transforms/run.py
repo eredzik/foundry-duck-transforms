@@ -32,7 +32,7 @@ if __name__ == "__main__":
         if len(list(files)) == 0: 
             return traverse_to_setup_and_add_to_path(str(parent))
         else:
-            sys.path.append(str(parent))
+            sys.path.insert(0, str(parent))
             return
         
     def main():
