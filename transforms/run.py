@@ -3,7 +3,9 @@ import sys
 from pathlib import Path
 from typing import Any
 
+import typer
 from sqlframe import activate
+from typing_extensions import Annotated
 
 activate(engine="duckdb")
 
@@ -24,20 +26,24 @@ if __name__ == "__main__":
         )  # Execute the module in its own namespace
         return module
 
-    def traverse_to_setup_and_add_to_path(
-        module_name: str
-    ) ->None:
+    def traverse_to_setup_and_add_to_path(module_name: str) -> None:
         parent = Path(module_name).parent
         files = parent.glob("setup.py")
-        if len(list(files)) == 0: 
+        if len(list(files)) == 0:
             return traverse_to_setup_and_add_to_path(str(parent))
         else:
             sys.path.insert(0, str(parent))
             return
-        
-    def main():
-        traverse_to_setup_and_add_to_path(sys.argv[1])
-        mod = import_from_path("transform", sys.argv[1])
+
+    def main(
+        transform_to_run: str,
+        fallback_branches: str,
+        omit_checks: Annotated[
+            bool, typer.Option(help="Disables checks running")
+        ] = False,
+    ):
+        traverse_to_setup_and_add_to_path(transform_to_run)
+        mod = import_from_path("transform", transform_to_run)
         transforms: dict[str, Transform | Any] = {}
         for name, item in mod.__dict__.items():
             if isinstance(item, Transform):
@@ -50,11 +56,11 @@ if __name__ == "__main__":
             print("file has no transforms")
             return
         sess: SparkSession = SparkSession.builder.appName("test").getOrCreate()  # type: ignore
-        DataFrame.rdd.mapPartitions()
-        branches = sys.argv[2].split(",")
+        branches = fallback_branches.split(",")
         TransformRunner(fallback_branches=branches).exec_transform(
             list(transforms.values())[0],
-            data_sourcer=FoundrySource(ctx=FoundryContext(), session=sess),  # type:ignore
+            data_sourcer=FoundrySource(ctx=FoundryContext(), session=sess),  # type:ignore,
+            omit_checks=omit_checks
         )
 
-    main()
+    typer.run(main)
