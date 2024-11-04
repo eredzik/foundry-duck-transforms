@@ -24,5 +24,5 @@ class LocalFileSinkWithDuck(LocalFileSink):
     ) -> None:
         super().save_transaction(df=df, dataset_path_or_rid=dataset_path_or_rid)
         self.conn.execute(
-            f"CREATE VIEW {self.get_dataset_dataset_name(dataset_path_or_rid)} IF NOT EXISTS as select * from load_parquet({self.output_dir}/{self.branch}/{dataset_path_or_rid})"
+            f"CREATE OR REPLACE VIEW {self.get_dataset_dataset_name(dataset_path_or_rid)} as select * from read_parquet('{self.output_dir}/{self.branch}/{dataset_path_or_rid}/*.parquet')" 
         )

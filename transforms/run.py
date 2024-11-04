@@ -91,7 +91,7 @@ if __name__ == "__main__":
         local_source = LocalDataSource(session=session)
         def get_dataset_name(dataset_path_or_rid: str) -> str:
             dataset_path = str(fndry_ctx.get_dataset(dataset_path_or_rid).path)
-            sha_addon = sha256(dataset_path.encode()).hexdigest()[2:]
+            sha_addon = sha256(dataset_path.encode()).hexdigest()[:2]
             dataset_name = dataset_path.split("/")[-1]
             return f"{dataset_name}_{sha_addon}"
         TransformRunner(
