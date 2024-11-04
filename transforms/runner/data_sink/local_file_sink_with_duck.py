@@ -15,7 +15,6 @@ class LocalFileSinkWithDuck(LocalFileSink):
 
     def __post_init__(self):
         Path(self.duckdb_path).parent.mkdir(parents=True, exist_ok=True)
-        self.conn = duckdb.connect(self.duckdb_path)
 
     def save_transaction(
         self,
@@ -23,6 +22,7 @@ class LocalFileSinkWithDuck(LocalFileSink):
         dataset_path_or_rid: str,
     ) -> None:
         super().save_transaction(df=df, dataset_path_or_rid=dataset_path_or_rid)
+        self.conn = duckdb.connect(self.duckdb_path, config={})
         self.conn.execute(
             f"CREATE OR REPLACE VIEW {self.get_dataset_dataset_name(dataset_path_or_rid)} as select * from read_parquet('{self.output_dir}/{self.branch}/{dataset_path_or_rid}/*.parquet')" 
         )
