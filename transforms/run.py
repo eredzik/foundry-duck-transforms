@@ -44,11 +44,11 @@ if __name__ == "__main__":
             bool, typer.Option(help="Disables checks running")
         ] = False,
         engine: Annotated[
-            Literal["spark", "duckdb"],
+            Engine,
             typer.Option(help="Engine to use for the transformation"),
         ] = "spark",
         dry_run: Annotated[
-            Engine, typer.Option(help="Dry run the transformation")
+            bool, typer.Option(help="Dry run the transformation")
         ] = False,
     ):
         if engine == "duckdb":
