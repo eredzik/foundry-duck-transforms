@@ -1,3 +1,4 @@
+import re
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Callable
@@ -15,7 +16,9 @@ class FoundrySourceWithDuck(FoundrySource):
     def download_dataset(self, dataset_path_or_rid: str, branch: str):
         df = super().download_dataset(dataset_path_or_rid, branch)
         self.conn = duckdb.connect(self.duckdb_path)
+        sanitized_branch = re.sub('[^0-9a-zA-Z]+', '*', branch)
+
         self.conn.execute(
-            f"CREATE OR REPLACE VIEW {branch}.{self.get_dataset_dataset_name(dataset_path_or_rid)} as select * from read_parquet('{self.last_path}')" 
+            f"CREATE OR REPLACE VIEW {sanitized_branch}.{self.get_dataset_dataset_name(dataset_path_or_rid)} as select * from read_parquet('{self.last_path}')" 
         )
         return df
