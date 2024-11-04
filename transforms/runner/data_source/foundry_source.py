@@ -42,7 +42,7 @@ class FoundrySource(DataSource):
             elif inferred_format == "csv":
                 ds = self.ctx.get_dataset(dataset_path_or_rid)
                 df: "DataFrame" = ds._context.foundry_sql_server.query_foundry_sql(
-                    f"select * from {dataset_path_or_rid}",
+                    f"select * from `{dataset_path_or_rid}`",
                     branch=branch,
                     return_type="spark",
                 )
