@@ -2,15 +2,20 @@ import importlib.util
 import sys
 from enum import Enum
 from pathlib import Path
-from typing import Any, Literal
+from typing import Any, Optional
 
 import typer
 from typing_extensions import Annotated
 
+from .runner.data_sink.local_file_sink import LocalFileSink
+from .runner.data_source.local_file_source import LocalDataSource
+from .runner.data_source.mixed_source import MixedDataSource
+
 
 class Engine(str, Enum):
-    spark = "spark" 
+    spark = "spark"
     duckdb = "duckdb"
+
 
 if __name__ == "__main__":
     from foundry_dev_tools import FoundryContext
@@ -46,10 +51,13 @@ if __name__ == "__main__":
         engine: Annotated[
             Engine,
             typer.Option(help="Engine to use for the transformation"),
-        ] = "spark",
+        ] = Engine.spark,
         dry_run: Annotated[
             bool, typer.Option(help="Dry run the transformation")
         ] = False,
+        local_dev_branch_name: Annotated[
+            Optional[str], typer.Option(help="Branch name for local development")
+        ] = None,
     ):
         if engine == "duckdb":
             from transforms.engine.duckdb import init_sess
@@ -75,9 +83,22 @@ if __name__ == "__main__":
             return
 
         branches = fallback_branches.split(",")
-        TransformRunner(fallback_branches=branches).exec_transform(
+        all_branches = (
+            [local_dev_branch_name] + branches
+            if local_dev_branch_name is not None
+            else branches
+        )
+        foundry_source = FoundrySource(ctx=FoundryContext(), session=session)
+        local_source = LocalDataSource(session=session)
+        TransformRunner(
+            sink=LocalFileSink(),
+            sourcer=MixedDataSource(
+                sources={b: foundry_source for b in branches},
+                fallback_source=local_source,
+            ),
+            fallback_branches=all_branches,
+        ).exec_transform(
             list(transforms.values())[0],
-            data_sourcer=FoundrySource(ctx=FoundryContext(), session=session),
             omit_checks=omit_checks,
             dry_run=dry_run,
         )

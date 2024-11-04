@@ -17,3 +17,6 @@ class DataSource(ABC):
     
     def get_last_transaction(self, dataset_path_or_rid: str, branches: list[str]) -> DataFrame:
         raise NotImplementedError()
+    
+class BranchNotFoundError(Exception):
+    pass

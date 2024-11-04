@@ -5,6 +5,7 @@ from typing import Literal
 from pyspark.sql import DataFrame
 
 from transforms.api.transform_df import OutputDf, Transform
+from transforms.runner.data_sink.base import DataSink
 from transforms.runner.data_source.base import DataSource
 
 from .exec_check import execute_check
@@ -12,6 +13,8 @@ from .exec_check import execute_check
 
 @dataclass
 class TransformRunner:
+    sourcer:DataSource
+    sink:DataSink
     fallback_branches: list[str] = field(default_factory=list)
     output_dir: Path = Path.home() / ".fndry_duck" / "output"
     secrets_config_location :Path =  Path.home() / ".fndry_duck" / "secrets"
@@ -19,14 +22,14 @@ class TransformRunner:
     def __post_init__(self):
         self.output_dir.mkdir(parents=True, exist_ok=True)
 
-    def exec_transform(self, transform: Transform, data_sourcer: DataSource, omit_checks: bool, dry_run:bool) -> None:
+    def exec_transform(self, transform: Transform, omit_checks: bool, dry_run:bool) -> None:
         sources = {}
 
         for argname, input in transform.inputs.items():
             branches = [
                 b for b in ([input.branch] + self.fallback_branches) if b is not None
             ]
-            sources[argname] = data_sourcer.download_for_branches(
+            sources[argname] = self.sourcer.download_for_branches(
                 input.path_or_rid, branches=branches
             )
         if transform.external_systems is not None:
@@ -38,7 +41,7 @@ class TransformRunner:
             for argname, output in transform.outputs.items():
                 def on_dataframe_req(mode: Literal["current", "previous"]) -> DataFrame:
                     if mode == "current":
-                        return data_sourcer.download_for_branches(
+                        return self.sourcer.download_for_branches(
                 output.path_or_rid, branches=self.fallback_branches)
                     else:
                         raise NotImplementedError()

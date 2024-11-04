@@ -8,6 +8,9 @@ from foundry_dev_tools.utils.caches.spark_caches import (
 )
 from pyspark.sql import DataFrame, SparkSession
 
+from transforms.runner.data_source.base import (
+    BranchNotFoundError as BranchNotFoundErrorBase,
+)
 from transforms.runner.data_source.base import DataSource
 
 
@@ -42,7 +45,8 @@ class FoundrySource(DataSource):
                 print(
                     f"Branch not found for dataset [{dataset_path_or_rid}]"
                 )
-        raise Exception("DatasetNotFound")
+                
+        raise BranchNotFoundErrorBase()
     
     def get_last_transaction(self, dataset_path_or_rid: str, branches: list[str])->DataFrame:
         
