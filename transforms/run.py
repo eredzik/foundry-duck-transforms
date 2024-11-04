@@ -1,10 +1,16 @@
 import importlib.util
 import sys
+from enum import Enum
 from pathlib import Path
 from typing import Any, Literal
 
 import typer
 from typing_extensions import Annotated
+
+
+class Engine(str, Enum):
+    spark = "spark" 
+    duckdb = "duckdb"
 
 if __name__ == "__main__":
     from foundry_dev_tools import FoundryContext
@@ -42,7 +48,7 @@ if __name__ == "__main__":
             typer.Option(help="Engine to use for the transformation"),
         ] = "spark",
         dry_run: Annotated[
-            bool, typer.Option(help="Dry run the transformation")
+            Engine, typer.Option(help="Dry run the transformation")
         ] = False,
     ):
         if engine == "duckdb":
