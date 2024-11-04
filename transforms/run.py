@@ -91,7 +91,7 @@ if __name__ == "__main__":
         foundry_source = FoundrySource(ctx=FoundryContext(), session=session)
         local_source = LocalDataSource(session=session)
         TransformRunner(
-            sink=LocalFileSink(),
+            sink=LocalFileSink(branch=local_dev_branch_name or "duck-fndry-dev"),
             sourcer=MixedDataSource(
                 sources={b: foundry_source for b in branches},
                 fallback_source=local_source,

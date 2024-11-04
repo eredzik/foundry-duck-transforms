@@ -52,7 +52,8 @@ class TransformRunner:
                         if not omit_checks:
                             for check in output.checks: 
                                 execute_check(res, check)
-                        df.write.parquet(f"{self.output_dir}/{output.path_or_rid}", mode="overwrite")
+                        
+                        self.sink.save_transaction(df = df,dataset_path_or_rid=output.path_or_rid) 
                     
                 impl_multi_outputs[argname] = OutputDf(on_dataframe_req=on_dataframe_req, on_dataframe_write=on_dataframe_write)
             transform.multi_outputs = impl_multi_outputs
@@ -68,9 +69,9 @@ class TransformRunner:
                 for check in transform.outputs["output"].checks:
                     execute_check(res if not dry_run else res.limit(1), check)
             if not (dry_run):
-                res.write.parquet(
-                    f"{self.output_dir}/{transform.outputs['output'].path_or_rid}", mode="overwrite"
-            )
+                self.sink.save_transaction(df = res,dataset_path_or_rid=transform.outputs['output'].path_or_rid) 
+                
+            
             else:
                 res.limit(1).collect()
         else:
