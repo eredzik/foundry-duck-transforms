@@ -13,7 +13,7 @@ class LocalDataSource(DataSource):
 
     def download_dataset(self, dataset_path_or_rid: str, branch: str):
         if not (Path(self.output_dir) / branch / dataset_path_or_rid).exists():
-            raise BranchNotFoundError()
+            raise BranchNotFoundError('LOCAL')
 
         return self.session.read.parquet(
             f"{self.output_dir}/{branch}/{dataset_path_or_rid}"
@@ -25,5 +25,5 @@ class LocalDataSource(DataSource):
                 return self.download_dataset(dataset_path_or_rid, branch=branch)
 
             except BranchNotFoundError:
-                print(f"Branch not found for dataset [{dataset_path_or_rid}]")
-        raise BranchNotFoundError()
+                print(f"[LOCAL]Branch [{branch}] not found for dataset [{dataset_path_or_rid}]")
+        raise BranchNotFoundError(source='LOCAL')

@@ -12,11 +12,18 @@ class DataSource(ABC):
         branch: str,
     ) -> DataFrame:
         raise NotImplementedError()
-    def download_for_branches(self, dataset_path_or_rid: str, branches: list[str]) -> DataFrame:
+
+    def download_for_branches(
+        self, dataset_path_or_rid: str, branches: list[str]
+    ) -> DataFrame:
         raise NotImplementedError()
-    
-    def get_last_transaction(self, dataset_path_or_rid: str, branches: list[str]) -> DataFrame:
+
+    def get_last_transaction(
+        self, dataset_path_or_rid: str, branches: list[str]
+    ) -> DataFrame:
         raise NotImplementedError()
-    
+
+
+@dataclass
 class BranchNotFoundError(Exception):
-    pass
+    source: str

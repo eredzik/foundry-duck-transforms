@@ -43,10 +43,10 @@ class FoundrySource(DataSource):
                 
             except BranchNotFoundError:
                 print(
-                    f"Branch not found for dataset [{dataset_path_or_rid}]"
+                    f"[FOUNDRY] Branch [{branch}] not found for dataset [{dataset_path_or_rid}]"
                 )
                 
-        raise BranchNotFoundErrorBase()
+        raise BranchNotFoundErrorBase('FOUNDRY')
     
     def get_last_transaction(self, dataset_path_or_rid: str, branches: list[str])->DataFrame:
         

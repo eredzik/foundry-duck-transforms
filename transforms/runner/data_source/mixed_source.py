@@ -12,7 +12,7 @@ class MixedDataSource(DataSource):
         source = self.sources.get(branch)
         if source is None:
             if self.fallback_source is None:
-                raise BranchNotFoundError()
+                raise BranchNotFoundError('SOURCE')
             source = self.fallback_source
         return source.download_dataset(dataset_path_or_rid, branch=branch)
 
@@ -23,6 +23,6 @@ class MixedDataSource(DataSource):
             try:
                 return self.download_dataset(dataset_path_or_rid, branch=branch)
 
-            except BranchNotFoundError:
-                print(f"Branch not found for dataset [{dataset_path_or_rid}]")
-        raise BranchNotFoundError()
+            except BranchNotFoundError as e:
+                print(f"[{e.source}] Branch [{branch}] not found for dataset [{dataset_path_or_rid}]")
+        raise BranchNotFoundError(source="MIXED")

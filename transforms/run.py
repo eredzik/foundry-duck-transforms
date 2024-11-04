@@ -8,7 +8,6 @@ from typing import Any
 import typer
 from typing_extensions import Annotated
 
-from .runner.data_sink.local_file_sink import LocalFileSink
 from .runner.data_sink.local_file_sink_with_duck import LocalFileSinkWithDuck
 from .runner.data_source.local_file_source import LocalDataSource
 from .runner.data_source.mixed_source import MixedDataSource
