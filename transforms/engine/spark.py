@@ -11,7 +11,6 @@ def init_sess() -> SparkSession:
         .config("spark.driver.memory", "6g")
         .config("spark.driver.host", "localhost")
         .config("spark.driver.hostname", "localhost")
-        .config("spark.jars.packages", "org.apache.spark:spark-connect_2.12:3.5.3")
         .getOrCreate()
     )
     
