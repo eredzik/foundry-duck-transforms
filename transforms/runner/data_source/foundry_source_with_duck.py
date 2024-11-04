@@ -17,8 +17,9 @@ class FoundrySourceWithDuck(FoundrySource):
         df = super().download_dataset(dataset_path_or_rid, branch)
         self.conn = duckdb.connect(self.duckdb_path)
         sanitized_branch = re.sub('[^0-9a-zA-Z]+', '_', branch)
-
+        self.conn.execute(f"create schema if not exists {sanitized_branch}")
         self.conn.execute(
             f"CREATE OR REPLACE VIEW {sanitized_branch}.{self.get_dataset_dataset_name(dataset_path_or_rid)} as select * from read_parquet('{self.last_path}')" 
         )
+        self.conn.close()
         return df
