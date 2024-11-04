@@ -9,6 +9,7 @@ import typer
 from typing_extensions import Annotated
 
 from .runner.data_sink.local_file_sink_with_duck import LocalFileSinkWithDuck
+from .runner.data_source.base import DataSource
 from .runner.data_source.local_file_source import LocalDataSource
 from .runner.data_source.mixed_source import MixedDataSource
 
@@ -85,19 +86,25 @@ if __name__ == "__main__":
 
         branches = fallback_branches.split(",")
         all_branches = [local_dev_branch_name] + branches
-        fndry_ctx= FoundryContext()
+        fndry_ctx = FoundryContext()
         foundry_source = FoundrySource(ctx=FoundryContext(), session=session)
         local_source = LocalDataSource(session=session)
+        sources_mapping: dict[str, DataSource] = {b: foundry_source for b in branches}
+        sources_mapping[local_dev_branch_name] = local_source
+
         def get_dataset_name(dataset_path_or_rid: str) -> str:
             dataset_path = str(fndry_ctx.get_dataset(dataset_path_or_rid).path)
             sha_addon = sha256(dataset_path.encode()).hexdigest()[:2]
             dataset_name = dataset_path.split("/")[-1]
             return f"{dataset_name}_{sha_addon}"
+
         TransformRunner(
-            sink=LocalFileSinkWithDuck(branch=local_dev_branch_name, get_dataset_dataset_name=get_dataset_name),
+            sink=LocalFileSinkWithDuck(
+                branch=local_dev_branch_name, get_dataset_dataset_name=get_dataset_name
+            ),
             sourcer=MixedDataSource(
-                sources={b: foundry_source for b in branches},
-                fallback_source=local_source,
+                sources=sources_mapping,
+                fallback_source=foundry_source,
             ),
             fallback_branches=all_branches,
         ).exec_transform(
