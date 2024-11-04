@@ -18,6 +18,7 @@ from transforms.runner.data_source.base import DataSource
 class FoundrySource(DataSource):
     ctx: FoundryContext
     session: SparkSession
+    
 
     def download_dataset(self, dataset_path_or_rid: str, branch: str) -> DataFrame:
         dataset_identity = self.ctx.cached_foundry_client._get_dataset_identity(
@@ -26,9 +27,10 @@ class FoundrySource(DataSource):
         if dataset_identity.get("last_transaction") is None:
             raise BranchNotFoundErrorBase("FOUNDRY")
 
-        _, dataset_identity = self.ctx.cached_foundry_client.fetch_dataset(
+        last_path, dataset_identity = self.ctx.cached_foundry_client.fetch_dataset(
             dataset_path_or_rid, branch
         )
+        self.last_path = last_path
         _validate_cache_key(dataset_identity)
         try:
             inferred_format = _infer_dataset_format(
