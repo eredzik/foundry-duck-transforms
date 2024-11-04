@@ -18,8 +18,15 @@ class FoundrySourceWithDuck(FoundrySource):
         self.conn = duckdb.connect(self.duckdb_path)
         sanitized_branch = re.sub('[^0-9a-zA-Z]+', '_', branch)
         self.conn.execute(f"create schema if not exists {sanitized_branch}")
-        self.conn.execute(
-            f"CREATE OR REPLACE VIEW {sanitized_branch}.{self.get_dataset_dataset_name(dataset_path_or_rid)} as select * from read_parquet('{self.last_path}')" 
-        )
+        if self.last_path.endswith('.parquet'):
+            self.conn.execute(
+                f"CREATE OR REPLACE VIEW {sanitized_branch}.{self.get_dataset_dataset_name(dataset_path_or_rid)} as select * from read_parquet('{self.last_path}')" 
+            )
+        elif self.last_path.endswith('.csv'):
+            self.conn.execute(
+                f"CREATE OR REPLACE VIEW {sanitized_branch}.{self.get_dataset_dataset_name(dataset_path_or_rid)} as select * from read_csv('{self.last_path}')" 
+            )
+        else:
+            raise NotImplementedError(f"Format {self.last_path.split('.')[-1]} is not supported")
         self.conn.close()
         return df
