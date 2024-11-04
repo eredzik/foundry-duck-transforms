@@ -19,6 +19,10 @@ class FoundrySource(DataSource):
     ctx: FoundryContext
     session: SparkSession
     def download_dataset(self, dataset_path_or_rid: str, branch: str):
+        dataset_identity = self.ctx.cached_foundry_client._get_dataset_identity(dataset_path_or_rid, branch)
+        if dataset_identity.get('last_transaction') is None:
+            raise BranchNotFoundErrorBase('FOUNDRY')
+            
         _, dataset_identity = self.ctx.cached_foundry_client.fetch_dataset(dataset_path_or_rid, branch)
         _validate_cache_key(dataset_identity)
         try:
@@ -45,6 +49,8 @@ class FoundrySource(DataSource):
                 print(
                     f"[FOUNDRY] Branch [{branch}] not found for dataset [{dataset_path_or_rid}]"
                 )
+            except BranchNotFoundErrorBase as e:
+                raise e
                 
         raise BranchNotFoundErrorBase('FOUNDRY')
     
