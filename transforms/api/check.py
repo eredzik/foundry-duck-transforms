@@ -1,7 +1,7 @@
 from dataclasses import dataclass
 from typing import Literal
 
-from ..expectations import Expectation
+from ..expectations.all import Expectation
 
 
 @dataclass

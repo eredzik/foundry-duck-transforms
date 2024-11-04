@@ -2,7 +2,7 @@ import importlib.util
 import sys
 from enum import Enum
 from pathlib import Path
-from typing import Any, Optional
+from typing import Any
 
 import typer
 from typing_extensions import Annotated
@@ -56,8 +56,8 @@ if __name__ == "__main__":
             bool, typer.Option(help="Dry run the transformation")
         ] = False,
         local_dev_branch_name: Annotated[
-            Optional[str], typer.Option(help="Branch name for local development")
-        ] = None,
+            str, typer.Option(help="Branch name for local development")
+        ] = "duck-fndry-dev",
     ):
         if engine == "duckdb":
             from transforms.engine.duckdb import init_sess
@@ -83,15 +83,11 @@ if __name__ == "__main__":
             return
 
         branches = fallback_branches.split(",")
-        all_branches = (
-            [local_dev_branch_name] + branches
-            if local_dev_branch_name is not None
-            else branches
-        )
+        all_branches = [local_dev_branch_name] + branches
         foundry_source = FoundrySource(ctx=FoundryContext(), session=session)
         local_source = LocalDataSource(session=session)
         TransformRunner(
-            sink=LocalFileSink(branch=local_dev_branch_name or "duck-fndry-dev"),
+            sink=LocalFileSink(branch=local_dev_branch_name),
             sourcer=MixedDataSource(
                 sources={b: foundry_source for b in branches},
                 fallback_source=local_source,

@@ -1,16 +1,11 @@
-from abc import ABC, abstractmethod
+
 from collections.abc import Mapping
 from dataclasses import dataclass
 
 from pyspark.sql import DataFrame
 from pyspark.sql.types import DataType
 
-
-@dataclass
-class Expectation(ABC):
-    @abstractmethod
-    def run(self, dataframe_to_verify: "DataFrame") -> None:
-        raise NotImplementedError("Expectation has to be implemented")
+from transforms.expectations.base import Expectation
 
 
 @dataclass
