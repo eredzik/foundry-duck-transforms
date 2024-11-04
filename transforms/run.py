@@ -1,17 +1,13 @@
 import importlib.util
 import sys
 from pathlib import Path
-from typing import Any
+from typing import Any, Literal
 
 import typer
-from sqlframe import activate
 from typing_extensions import Annotated
-
-activate(engine="duckdb")
 
 if __name__ == "__main__":
     from foundry_dev_tools import FoundryContext
-    from pyspark.sql import DataFrame, SparkSession
 
     from transforms.api.transform_df import Transform
     from transforms.runner.data_source.foundry_source import FoundrySource
@@ -41,7 +37,23 @@ if __name__ == "__main__":
         omit_checks: Annotated[
             bool, typer.Option(help="Disables checks running")
         ] = False,
+        engine: Annotated[
+            Literal["spark", "duckdb"],
+            typer.Option(help="Engine to use for the transformation"),
+        ] = "spark",
+        dry_run: Annotated[
+            bool, typer.Option(help="Dry run the transformation")
+        ] = False,
     ):
+        if engine == "duckdb":
+            from transforms.engine.duckdb import init_sess
+
+            session = init_sess()
+        else:
+            from transforms.engine.spark import init_sess
+
+            session = init_sess()
+
         traverse_to_setup_and_add_to_path(transform_to_run)
         mod = import_from_path("transform", transform_to_run)
         transforms: dict[str, Transform | Any] = {}
@@ -55,12 +67,13 @@ if __name__ == "__main__":
         if len(transforms) == 0:
             print("file has no transforms")
             return
-        sess: SparkSession = SparkSession.builder.appName("test").getOrCreate()  # type: ignore
+
         branches = fallback_branches.split(",")
         TransformRunner(fallback_branches=branches).exec_transform(
             list(transforms.values())[0],
-            data_sourcer=FoundrySource(ctx=FoundryContext(), session=sess),  # type:ignore,
-            omit_checks=omit_checks
+            data_sourcer=FoundrySource(ctx=FoundryContext(), session=session),
+            omit_checks=omit_checks,
+            dry_run=dry_run,
         )
 
     typer.run(main)

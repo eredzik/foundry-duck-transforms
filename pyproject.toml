@@ -1,5 +1,5 @@
 [project]
-optional-dependencies = { dev = ["pyspark>=3.0.0", 'foundry-dev-tools'] }
+optional-dependencies = { dev = ["pyspark>=3.0.0"] }
 name = "foundry-duck-transforms"
 readme = "README.md"
 description = "Run transforms quickly on local machine and analyse using DuckDb and pyspark"
@@ -19,7 +19,15 @@ classifiers = [
     "Operating System :: Microsoft :: Windows",
     "Topic :: Scientific/Engineering :: Information Analysis",
 ]
-dependencies = ["duckdb", 'sqlframe', 'pyspark', 'pandas']
+dependencies = [
+    "duckdb",
+    'sqlframe',
+    'pyspark',
+    'pandas',
+    'typer',
+    'pyarrow',
+    'foundry-dev-tools',
+]
 version = "0.1.0"
 
 [build-system]

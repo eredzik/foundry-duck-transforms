@@ -15,11 +15,11 @@ class TransformRunner:
     fallback_branches: list[str] = field(default_factory=list)
     output_dir: Path = Path.home() / ".fndry_duck" / "output"
     secrets_config_location :Path =  Path.home() / ".fndry_duck" / "secrets"
-
+    
     def __post_init__(self):
         self.output_dir.mkdir(parents=True, exist_ok=True)
 
-    def exec_transform(self, transform: Transform, data_sourcer: DataSource, omit_checks: bool) -> None:
+    def exec_transform(self, transform: Transform, data_sourcer: DataSource, omit_checks: bool, dry_run:bool) -> None:
         sources = {}
 
         for argname, input in transform.inputs.items():
@@ -57,15 +57,19 @@ class TransformRunner:
         
 
         res = transform.transform(**sources)
-        res.show(0)
+        
+        
         if transform.multi_outputs is None:
             res: DataFrame
             if not omit_checks:
                 for check in transform.outputs["output"].checks:
-                    execute_check(res, check)
-            res.write.parquet(
-                f"{self.output_dir}/{transform.outputs['output'].path_or_rid}", mode="overwrite"
+                    execute_check(res if not dry_run else res.limit(1), check)
+            if not (dry_run):
+                res.write.parquet(
+                    f"{self.output_dir}/{transform.outputs['output'].path_or_rid}", mode="overwrite"
             )
+            else:
+                res.limit(1).collect()
         else:
             if transform.incremental_opts is not None:
                 raise NotImplementedError("Not yet implemented saving for incremental dataset")
