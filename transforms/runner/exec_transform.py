@@ -60,7 +60,7 @@ class TransformRunner:
             
         
 
-        res = transform.transform(**sources)
+        res = transform.transform(**sources).cache()
         
         
         if transform.multi_outputs is None:
