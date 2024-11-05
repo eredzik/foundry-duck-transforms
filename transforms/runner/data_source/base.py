@@ -23,6 +23,12 @@ class DataSource(ABC):
     ) -> DataFrame:
         raise NotImplementedError()
 
+    def download_latest_incremental_transaction(
+        self, dataset_path_or_rid: str, branches: list[str], semantic_version: int
+    ) -> "DataFrame":
+        # TODO: Implement it
+        raise NotImplementedError()
+
 
 @dataclass
 class BranchNotFoundError(Exception):

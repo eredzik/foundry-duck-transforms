@@ -44,16 +44,19 @@ class TransformRunner:
                         return self.sourcer.download_for_branches(
                 output.path_or_rid, branches=self.fallback_branches)
                     else:
-                        raise NotImplementedError()
+                        if (transform.incremental_opts is not None) and (not dry_run):
+                            return self.sourcer.download_latest_incremental_transaction(dataset_path_or_rid=output.path_or_rid, branches=self.fallback_branches, semantic_version=transform.incremental_opts.semantic_version)
                 def on_dataframe_write(df: DataFrame, mode: Literal["append", "replace"]):
                     if mode == "append":
                         raise NotImplementedError()
                     else:
                         if not omit_checks:
                             for check in output.checks: 
-                                execute_check(res, check)
-                        
-                        self.sink.save_transaction(df = df,dataset_path_or_rid=output.path_or_rid) 
+                                execute_check(df, check)
+                        if (transform.incremental_opts is not None) and (not dry_run):
+                            self.sink.save_incremental_transaction(df, output.path_or_rid, transform.incremental_opts.semantic_version)
+                        else:
+                            self.sink.save_transaction(df = df,dataset_path_or_rid=output.path_or_rid) 
                 output_df_impl=TransformOutput(on_dataframe_req=on_dataframe_req, on_dataframe_write=on_dataframe_write)
                 impl_multi_outputs[argname] = output_df_impl
                 sources[argname] = output_df_impl
@@ -77,6 +80,8 @@ class TransformRunner:
                 res.limit(1).collect()
         else:
             if transform.incremental_opts is not None:
+                print("Finished transform successfully")
+
                 raise NotImplementedError("Not yet implemented saving for incremental dataset")
             else:
                 print("Finished transform successfully")

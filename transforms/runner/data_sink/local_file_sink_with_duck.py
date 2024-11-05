@@ -26,3 +26,13 @@ class LocalFileSinkWithDuck(LocalFileSink):
         self.conn.execute(
             f"CREATE OR REPLACE VIEW {self.get_dataset_dataset_name(dataset_path_or_rid)} as select * from read_parquet('{self.output_dir}/{self.branch}/{dataset_path_or_rid}/*.parquet')" 
         )
+
+    def save_incremental_transaction(
+            self,
+            df: DataFrame,
+            dataset_path_or_rid:str,
+            semantic_version: int,
+    ):
+        # TODO: Implement
+        pass
+    
