@@ -54,8 +54,9 @@ class TransformRunner:
                                 execute_check(res, check)
                         
                         self.sink.save_transaction(df = df,dataset_path_or_rid=output.path_or_rid) 
-                    
-                impl_multi_outputs[argname] = OutputDf(on_dataframe_req=on_dataframe_req, on_dataframe_write=on_dataframe_write)
+                output_df_impl=OutputDf(on_dataframe_req=on_dataframe_req, on_dataframe_write=on_dataframe_write)
+                impl_multi_outputs[argname] = output_df_impl
+                sources[argname] = output_df_impl
             transform.multi_outputs = impl_multi_outputs
             
         
