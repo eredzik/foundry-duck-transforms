@@ -16,7 +16,7 @@ class LocalDataSource(DataSource):
             raise BranchNotFoundError('LOCAL')
 
         return self.session.read.parquet(
-            f"{self.output_dir}/{branch}/{dataset_path_or_rid}"
+            f"{self.output_dir}/{branch}/{dataset_path_or_rid}/*.parquet"
         )
 
     def download_for_branches(self, dataset_path_or_rid: str, branches: list[str]):
