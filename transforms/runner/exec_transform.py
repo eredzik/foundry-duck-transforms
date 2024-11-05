@@ -36,7 +36,6 @@ class TransformRunner:
             for external_system in transform.external_systems:
                 transform.external_systems[external_system].secrets_config_location = str(self.secrets_config_location)
                 sources[external_system] = transform.external_systems[external_system]
-            raise NotImplementedError("External systems are not yet implemented")
         if transform.multi_outputs is not None:
             impl_multi_outputs = {}
             for argname, output in transform.outputs.items():

@@ -21,11 +21,6 @@ class Engine(str, Enum):
 
 
 if __name__ == "__main__":
-    from foundry_dev_tools import FoundryContext
-
-    from transforms.api.transform_df import Transform
-    from transforms.runner.data_source.foundry_source import FoundrySource
-    from transforms.runner.exec_transform import TransformRunner
 
     def import_from_path(module_name: str, file_path: str):
         spec = importlib.util.spec_from_file_location(module_name, file_path)
@@ -71,6 +66,10 @@ if __name__ == "__main__":
 
             session = init_sess()
 
+        from foundry_dev_tools import FoundryContext
+
+        from transforms.api.transform_df import Transform
+        from transforms.runner.exec_transform import TransformRunner
         traverse_to_setup_and_add_to_path(transform_to_run)
         mod = import_from_path("transform", transform_to_run)
         transforms: dict[str, Transform | Any] = {}
