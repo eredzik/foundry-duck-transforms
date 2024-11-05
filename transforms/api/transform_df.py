@@ -43,7 +43,7 @@ class Transform:
         inputs: dict[str, Input],
         outputs: dict[str, Output],
         transform: Callable[..., Any],
-        multi_outputs: dict[str, "OutputDf"] | None = None,
+        multi_outputs: dict[str, "TransformOutput"] | None = None,
         incremental_opts: "IncrementalTransformOpts | None" = None,
         external_systems: dict[str, "Source"] | None = None,
     ):
@@ -60,7 +60,7 @@ DecoratorParamSpec = ParamSpec(
 )
 
 
-class InputDf:
+class TransformInput:
     def __init__(self, df: DataFrame):
         self.df = df
 
@@ -70,7 +70,7 @@ class InputDf:
         return self.df
 
 
-class OutputDf:
+class TransformOutput:
     def __init__(
         self,
         on_dataframe_req: Callable[[Literal["current", "previous"]], DataFrame],
@@ -87,7 +87,7 @@ class OutputDf:
         self.mode_state = mode
         return self
 
-    def write(self, df: DataFrame):
+    def write_dataframe(self, df: DataFrame):
         return self.on_dataframe_write(df, self.mode_state)
 
 
@@ -103,15 +103,15 @@ def transform(**kwargs: Input | Output):
             if isinstance(arg, Output):
                 outputs[key] = arg
 
-        def transformed_transform(**kwargs: DataFrame | Source | OutputDf) -> None:
-            new_kwargs: dict[str, InputDf|Source| OutputDf] = {}
+        def transformed_transform(**kwargs: DataFrame | Source | TransformOutput) -> None:
+            new_kwargs: dict[str, TransformInput|Source| TransformOutput] = {}
             for key, value in kwargs.items():
                 if isinstance(value, Source):
                     new_kwargs[key] = value
-                elif isinstance(value, OutputDf):
+                elif isinstance(value, TransformOutput):
                     new_kwargs[key] = value
                 else:
-                    new_kwargs[key] = InputDf(df=value)
+                    new_kwargs[key] = TransformInput(df=value)
             return transform(**new_kwargs)
 
         return Transform(

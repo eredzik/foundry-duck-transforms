@@ -45,15 +45,15 @@ def test_all():
 def test_multi_output():
     from transforms.api.transform_df import (
         Input,
-        InputDf,
         Output,
-        OutputDf,
+        TransformInput,
+        TransformOutput,
         transform,
     )
 
     
     
     @transform(out1=Output("dataset"), df1=Input("dataset"))
-    def some_transform(out1: OutputDf, df1: InputDf):
+    def some_transform(out1: TransformOutput, df1: TransformInput):
         return df1
     assert some_transform.inputs["df1"] is not None

@@ -4,7 +4,7 @@ from typing import Literal
 
 from pyspark.sql import DataFrame
 
-from transforms.api.transform_df import OutputDf, Transform
+from transforms.api.transform_df import Transform, TransformOutput
 from transforms.runner.data_sink.base import DataSink
 from transforms.runner.data_source.base import DataSource
 
@@ -54,7 +54,7 @@ class TransformRunner:
                                 execute_check(res, check)
                         
                         self.sink.save_transaction(df = df,dataset_path_or_rid=output.path_or_rid) 
-                output_df_impl=OutputDf(on_dataframe_req=on_dataframe_req, on_dataframe_write=on_dataframe_write)
+                output_df_impl=TransformOutput(on_dataframe_req=on_dataframe_req, on_dataframe_write=on_dataframe_write)
                 impl_multi_outputs[argname] = output_df_impl
                 sources[argname] = output_df_impl
             transform.multi_outputs = impl_multi_outputs
