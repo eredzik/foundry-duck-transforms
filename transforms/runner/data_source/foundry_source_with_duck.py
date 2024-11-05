@@ -20,11 +20,11 @@ class FoundrySourceWithDuck(FoundrySource):
         self.conn.execute(f"create schema if not exists {sanitized_branch}")
         if self.last_path.endswith('.parquet'):
             self.conn.execute(
-                f"CREATE OR REPLACE VIEW {sanitized_branch}.{self.get_dataset_dataset_name(dataset_path_or_rid)} as select * from read_parquet('{self.last_path}')" 
+                f"CREATE OR REPLACE VIEW {sanitized_branch}.{self.get_dataset_dataset_name(dataset_path_or_rid)} as select * from read_parquet('{self.last_path}/spark/*.parquet')" 
             )
         elif self.last_path.endswith('.csv'):
             self.conn.execute(
-                f"CREATE OR REPLACE VIEW {sanitized_branch}.{self.get_dataset_dataset_name(dataset_path_or_rid)} as select * from read_csv('{self.last_path}')" 
+                f"CREATE OR REPLACE VIEW {sanitized_branch}.{self.get_dataset_dataset_name(dataset_path_or_rid)} as select * from read_csv('{self.last_path}/*.csv')" 
             )
         else:
             raise NotImplementedError(f"Format {self.last_path.split('.')[-1]} is not supported")
