@@ -66,6 +66,7 @@ class TransformInput:
 
     def dataframe(
         self,
+        mode: Literal["current", "previous"] = "current"
     ):
         return self.df
 
@@ -80,10 +81,10 @@ class TransformOutput:
         self.on_dataframe_write = on_dataframe_write
         self.mode_state: Literal["replace", "append"] = "replace"
 
-    def dataframe(self, mode: Literal["current", "previous"]) -> DataFrame:
+    def dataframe(self, mode: Literal["current", "previous"] = "current") -> DataFrame:
         return self.on_dataframe_req(mode)
 
-    def mode(self, mode: Literal["append", "replace"]):
+    def set_mode(self, mode: Literal["append", "replace"]):
         self.mode_state = mode
         return self
 
