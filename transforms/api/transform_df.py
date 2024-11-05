@@ -103,8 +103,13 @@ def transform(**kwargs: Input | Output):
             if isinstance(arg, Output):
                 outputs[key] = arg
 
-        def transformed_transform(**kwargs: DataFrame) -> None:
-            new_kwargs = {key: InputDf(df=value) for key, value in kwargs.items()}
+        def transformed_transform(**kwargs: DataFrame| Source) -> None:
+            new_kwargs: dict[str, InputDf|Source] = {}
+            for key, value in kwargs.items():
+                if isinstance(value, Source):
+                    new_kwargs[key] = value
+                else:
+                    new_kwargs[key] = InputDf(df=value)
             return transform(**new_kwargs)
 
         return Transform(
