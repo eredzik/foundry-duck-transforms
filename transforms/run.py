@@ -1,4 +1,5 @@
 import sys
+from contextlib import contextmanager
 from enum import Enum
 from pathlib import Path
 
@@ -11,16 +12,29 @@ class Engine(str, Enum):
     duckdb = "duckdb"
 
 
-if __name__ == "__main__":
+def find_path_where_there_is_setup(module_name: str) -> str:
+    parent = Path(module_name).parent
+    files = parent.glob("setup.py")
+    if parent == module_name:
+        raise Exception("Root reached, no setup.py found")
+    if len(list(files)) == 0:
+        return find_path_where_there_is_setup(str(parent))
+    else:
+        return str(parent)
 
-    def traverse_to_setup_and_add_to_path(module_name: str) -> None:
-        parent = Path(module_name).parent
-        files = parent.glob("setup.py")
-        if len(list(files)) == 0:
-            return traverse_to_setup_and_add_to_path(str(parent))
-        else:
-            sys.path.insert(0, str(parent))
-            return
+
+@contextmanager
+def traverse_to_setup_and_add_to_path(module_name: str):
+    path = find_path_where_there_is_setup(module_name=module_name)
+    sys.path.insert(0, str(path))
+    try:
+        sys.path.insert(0, str(path))
+        yield
+    finally:
+        sys.path.remove(str(path))
+
+
+if __name__ == "__main__":
 
     def main(
         transform_to_run: str,
@@ -39,24 +53,24 @@ if __name__ == "__main__":
             str, typer.Option(help="Branch name for local development")
         ] = "duck-fndry-dev",
     ):
-        traverse_to_setup_and_add_to_path(transform_to_run)
-        if engine == "duckdb":
-            from transforms.engine.duckdb import init_sess
+        with traverse_to_setup_and_add_to_path(transform_to_run):
+            if engine == "duckdb":
+                from transforms.engine.duckdb import init_sess
 
-            session = init_sess()
-        else:
-            from transforms.engine.spark import init_sess
+                session = init_sess()
+            else:
+                from transforms.engine.spark import init_sess
 
-            session = init_sess()
-        from .runner.default_executor import execute_with_default_foundry
+                session = init_sess()
+            from .runner.default_executor import execute_with_default_foundry
 
-        execute_with_default_foundry(
-            dry_run=dry_run,
-            fallback_branches=fallback_branches,
-            session=session,
-            local_dev_branch_name=local_dev_branch_name,
-            omit_checks=omit_checks,
-            transform_to_run=transform_to_run
-        )
+            execute_with_default_foundry(
+                dry_run=dry_run,
+                fallback_branches=fallback_branches,
+                session=session,
+                local_dev_branch_name=local_dev_branch_name,
+                omit_checks=omit_checks,
+                transform_to_run=transform_to_run,
+            )
 
     typer.run(main)
