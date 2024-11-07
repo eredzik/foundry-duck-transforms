@@ -1,8 +1,10 @@
 
 from collections.abc import Mapping
 from dataclasses import dataclass
+from typing import Callable
 
 from pyspark.sql import DataFrame
+from pyspark.sql import functions as F
 from pyspark.sql.types import DataType
 
 from transforms.expectations.base import Expectation
@@ -59,7 +61,16 @@ class ColExpectationIsIn(Expectation):
         cnt = dataframe_to_verify.filter(~F.col(self.col).isin(self.values_arr)).count()
         if cnt > 0:
             raise AssertionError(f"Column {self.col} is not in {self.values_arr}")
+@dataclass
+class ColExpectation(Expectation):
+    col: str
+    operation: Callable[[DataFrame], DataFrame]
 
+    def run(self, dataframe_to_verify: "DataFrame"):
+        result = self.operation(dataframe_to_verify)
+        res = result.filter(result["result"] == False).limit(10).collect()
+        if len(res) > 0:
+            raise AssertionError(f"Column {self.col} failed to meet expectations, example issues: {res}")
 
 @dataclass
 class ColExpectationBuilder:
@@ -67,7 +78,10 @@ class ColExpectationBuilder:
 
     def is_in(self, *values_arr: str) -> Expectation:
         return ColExpectationIsIn(self.col, list(values_arr))
-
+    def rlike(self, pattern: str) -> Expectation:
+        def operation(df: DataFrame) -> DataFrame:
+            return df.withColumn('result',F.col(self.col).rlike(pattern))
+        return ColExpectation(col=self.col, operation=operation)
 
 schema = SchemaBuilder
 primary_key = PrimaryKeyExpectation
