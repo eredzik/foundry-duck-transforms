@@ -122,7 +122,7 @@ class ColExpectationBuilder:
     def lte(self, other: int | float) -> Expectation:
         return OpComparisonExpectation(colname=self.col, value=other, operator=op.le)
 
-    def eq(self, other: int | float) -> Expectation:
+    def equals(self, other: int | float) -> Expectation:
         return OpComparisonExpectation(colname=self.col, value=other, operator=op.eq)
 
 
