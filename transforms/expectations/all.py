@@ -118,7 +118,13 @@ class ColExpectationBuilder:
     def lte(self, other: int | float) -> Expectation:
         return OpComparisonExpectation(colname=self.col, value=other, operator=op.le)
 
-
+class AllExpectationBuilder(Expectation):
+    def __init__(self, expectations: list[Expectation]):
+        self.expectations = expectations
+    def run(self, dataframe_to_verify: DataFrame) -> None:
+        for expectation in self.expectations:
+            expectation.run(dataframe_to_verify)
+all = AllExpectationBuilder
 schema = SchemaBuilder
 primary_key = PrimaryKeyExpectation
 col = ColExpectationBuilder
