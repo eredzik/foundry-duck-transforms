@@ -1,6 +1,7 @@
 from .check import Check
 from .configure import configure
 from .incremental_transform import incremental
+from .pipeline import Pipeline
 from .transform_df import (
     Input,
     Output,
@@ -22,4 +23,5 @@ __all__ = [
     "transform",
     "TransformInput",
     "TransformOutput",
+    "Pipeline",
 ]
