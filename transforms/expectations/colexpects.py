@@ -124,7 +124,10 @@ class ColExpectationBuilder:
 
     def equals(self, other: int | float) -> Expectation:
         return OpComparisonExpectation(colname=self.col, value=other, operator=op.eq)
-
+    def non_null(self) -> Expectation:
+        def operation(df: DataFrame) -> DataFrame:
+            return df.withColumn("result", F.col(self.col).isNotNull())
+        return ColExpectation(col=self.col, operation=operation)
 
 class AllExpectationBuilder(Expectation):
     def __init__(self, *expectations: Expectation):
