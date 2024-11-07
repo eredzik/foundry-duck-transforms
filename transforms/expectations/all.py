@@ -124,14 +124,30 @@ class ColExpectationBuilder:
 
 
 class AllExpectationBuilder(Expectation):
-    def __init__(self, expectations: list[Expectation]):
+    def __init__(self, *expectations: Expectation):
         self.expectations = expectations
 
     def run(self, dataframe_to_verify: "DataFrame") -> None:
         for expectation in self.expectations:
             expectation.run(dataframe_to_verify)
 
+class AnyExpectationBuilder(Expectation):
+    def __init__(self, *expectations: Expectation):
+        self.expectations = expectations
 
+    def run(self, dataframe_to_verify: "DataFrame") -> None:
+        num_nonfailures = 0
+        for expectation in self.expectations:
+            try:
+                expectation.run(dataframe_to_verify)
+                num_nonfailures += 1
+                return
+            except AssertionError:
+                pass
+        if num_nonfailures == 0:
+            raise AssertionError("No expectations passed")
+
+any = AnyExpectationBuilder
 all = AllExpectationBuilder
 schema = SchemaBuilder
 primary_key = PrimaryKeyExpectation
