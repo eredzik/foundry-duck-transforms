@@ -1,10 +1,14 @@
-import _operator
+from typing import TYPE_CHECKING, Callable
+
+if TYPE_CHECKING:
+    import _operator
+
+    from pyspark.sql import Column, DataFrame
+    from pyspark.sql import functions as F
 import operator as op
 from collections.abc import Mapping
 from dataclasses import dataclass
-from typing import Callable
 
-from pyspark.sql import Column, DataFrame
 from pyspark.sql import functions as F
 from pyspark.sql.types import DataType
 
@@ -79,9 +83,7 @@ class ColExpectation(Expectation):
 @dataclass
 class OpComparisonExpectation(Expectation):
     colname: str
-    operator: Callable[
-        [_operator._SupportsComparison, _operator._SupportsComparison], Column
-    ]
+    operator: "Callable[[_operator._SupportsComparison, _operator._SupportsComparison], Column]"
     value: int | float
 
     def run(self, dataframe_to_verify: "DataFrame"):
@@ -93,8 +95,6 @@ class OpComparisonExpectation(Expectation):
             raise AssertionError(
                 f"Column {self.colname} failed to meet expectations, example issues: {res}"
             )
-
-
 
 
 @dataclass
