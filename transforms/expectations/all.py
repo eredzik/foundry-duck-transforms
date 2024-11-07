@@ -69,7 +69,7 @@ class ColExpectationIsIn(Expectation):
 @dataclass
 class ColExpectation(Expectation):
     col: str
-    operation: Callable[[DataFrame], DataFrame]
+    operation: "Callable[[DataFrame], DataFrame]"
 
     def run(self, dataframe_to_verify: "DataFrame"):
         result = self.operation(dataframe_to_verify)
@@ -109,13 +109,14 @@ class ColExpectationBuilder:
             return df.withColumn("result", F.col(self.col).rlike(pattern))
 
         return ColExpectation(col=self.col, operation=operation)
-
+    def gt(self, other: int | float) -> Expectation:
+        return OpComparisonExpectation(colname=self.col, value=other, operator=op.gt)
     def gte(self, other: int | float) -> Expectation:
-        return OpComparisonExpectation(
-            colname=self.col,
-            value=other,
-            operator=op.ge,
-        )
+        return OpComparisonExpectation(colname=self.col, value=other, operator=op.ge)
+    def lt(self, other: int | float) -> Expectation:
+        return OpComparisonExpectation(colname=self.col, value=other, operator=op.lt)
+    def lte(self, other: int | float) -> Expectation:
+        return OpComparisonExpectation(colname=self.col, value=other, operator=op.le)
 
 
 schema = SchemaBuilder
