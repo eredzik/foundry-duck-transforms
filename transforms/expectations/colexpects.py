@@ -9,6 +9,7 @@ import operator as op
 from collections.abc import Mapping
 from dataclasses import dataclass
 
+from pyspark.sql import DataFrame
 from pyspark.sql import functions as F
 from pyspark.sql.types import DataType
 
