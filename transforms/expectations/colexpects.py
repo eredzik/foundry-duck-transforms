@@ -122,6 +122,9 @@ class ColExpectationBuilder:
     def lte(self, other: int | float) -> Expectation:
         return OpComparisonExpectation(colname=self.col, value=other, operator=op.le)
 
+    def eq(self, other: int | float) -> Expectation:
+        return OpComparisonExpectation(colname=self.col, value=other, operator=op.eq)
+
 
 class AllExpectationBuilder(Expectation):
     def __init__(self, *expectations: Expectation):
@@ -130,6 +133,7 @@ class AllExpectationBuilder(Expectation):
     def run(self, dataframe_to_verify: "DataFrame") -> None:
         for expectation in self.expectations:
             expectation.run(dataframe_to_verify)
+
 
 class AnyExpectationBuilder(Expectation):
     def __init__(self, *expectations: Expectation):
@@ -146,6 +150,7 @@ class AnyExpectationBuilder(Expectation):
                 pass
         if num_nonfailures == 0:
             raise AssertionError("No expectations passed")
+
 
 any = AnyExpectationBuilder
 all = AllExpectationBuilder
