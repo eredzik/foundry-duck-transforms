@@ -10,6 +10,7 @@ from typing_extensions import Annotated
 class Engine(str, Enum):
     spark = "spark"
     duckdb = "duckdb"
+    sparksail = "spark-sail"
 
 
 def find_path_where_there_is_setup(module_name: str) -> str:
@@ -54,9 +55,12 @@ if __name__ == "__main__":
         ] = "duck-fndry-dev",
     ):
         with traverse_to_setup_and_add_to_path(transform_to_run):
-            if engine == "duckdb":
+            if engine == engine.duckdb:
                 from transforms.engine.duckdb import init_sess
 
+                session = init_sess()
+            if engine ==Engine.sparksail:
+                from transforms.engine.spark_sail import init_sess
                 session = init_sess()
             else:
                 from transforms.engine.spark import init_sess
