@@ -39,7 +39,9 @@ class FoundrySourceWithDuck(FoundrySource):
             for row in self.conn.query(f"select schema_name from information_schema.schemata where catalog_name = '{Path(self.duckdb_path).stem}'").fetchall():
                 f.write(f"create schema if not exists {row[0]};\n")
             for row in self.conn.query("select sql from duckdb_views() where not internal").fetchall():
-                f.write(f"{row[0]};\n")
+                qry :str= row[0]
+                view_replacement = qry.replace('CREATE VIEW ', 'CREATE OR REPLACE VIEW ')
+                f.write(f"{view_replacement};\n")
         self.conn.close()
         return df
 
