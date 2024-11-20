@@ -13,7 +13,7 @@ logging.basicConfig(
     format="%(asctime)s - %(levelname)s - %(message)s",
     datefmt="%d-%b-%y %H:%M:%S",
 )
-
+logger = logging.getLogger(__name__)
 
 class Engine(str, Enum):
     spark = "spark"
@@ -66,6 +66,7 @@ if __name__ == "__main__":
         ] = "duck-fndry-dev",
     ):
         with traverse_to_setup_and_add_to_path(transform_to_run):
+            logger.info(f"Starting engine {engine}")
             if engine == engine.duckdb:
                 from transforms.engine.duckdb import init_sess
 
@@ -78,6 +79,7 @@ if __name__ == "__main__":
                 from transforms.engine.spark import init_sess
 
                 session = init_sess()
+            logger.info(f"Started engine {engine}")
             from .runner.default_executor import execute_with_default_foundry
 
             execute_with_default_foundry(

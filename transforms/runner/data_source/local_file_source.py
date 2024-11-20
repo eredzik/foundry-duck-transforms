@@ -4,6 +4,8 @@ from pathlib import Path
 from pyspark.sql import SparkSession
 
 from transforms.runner.data_source.base import BranchNotFoundError, DataSource
+import logging
+logger = logging.getLogger(__name__)
 
 
 @dataclass
@@ -25,5 +27,5 @@ class LocalDataSource(DataSource):
                 return self.download_dataset(dataset_path_or_rid, branch=branch)
 
             except BranchNotFoundError:
-                print(f"[LOCAL]Branch [{branch}] not found for dataset [{dataset_path_or_rid}]")
+                logger.info(f"[LOCAL]Branch [{branch}] not found for dataset [{dataset_path_or_rid}]")
         raise BranchNotFoundError(source='LOCAL')
