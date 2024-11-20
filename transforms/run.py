@@ -2,6 +2,7 @@ import sys
 from contextlib import contextmanager
 from enum import Enum
 from pathlib import Path
+from typing import Optional
 
 import typer
 from typing_extensions import Annotated
@@ -47,6 +48,7 @@ if __name__ == "__main__":
             Engine,
             typer.Option(help="Engine to use for the transformation"),
         ] = Engine.spark,
+        sail_server_url: Annotated[Optional[str], typer.Option(help="Sail server url")] = None,
         dry_run: Annotated[
             bool, typer.Option(help="Dry run the transformation")
         ] = False,
@@ -61,7 +63,7 @@ if __name__ == "__main__":
                 session = init_sess()
             if engine ==Engine.sparksail:
                 from transforms.engine.spark_sail import init_sess
-                session = init_sess()
+                session = init_sess(sail_server_url)
             else:
                 from transforms.engine.spark import init_sess
 
