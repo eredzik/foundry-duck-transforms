@@ -6,6 +6,13 @@ from typing import Optional
 
 import typer
 from typing_extensions import Annotated
+import logging
+
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s - %(levelname)s - %(message)s",
+    datefmt="%d-%b-%y %H:%M:%S",
+)
 
 
 class Engine(str, Enum):
@@ -17,7 +24,7 @@ class Engine(str, Enum):
 def find_path_where_there_is_setup(module_name: str) -> str:
     parent = Path(module_name).parent
     files = parent.glob("setup.py")
-    if parent == module_name:
+    if str(parent) == module_name:
         raise Exception("Root reached, no setup.py found")
     if len(list(files)) == 0:
         return find_path_where_there_is_setup(str(parent))
@@ -48,7 +55,9 @@ if __name__ == "__main__":
             Engine,
             typer.Option(help="Engine to use for the transformation"),
         ] = Engine.spark,
-        sail_server_url: Annotated[Optional[str], typer.Option(help="Sail server url")] = None,
+        sail_server_url: Annotated[
+            Optional[str], typer.Option(help="Sail server url")
+        ] = None,
         dry_run: Annotated[
             bool, typer.Option(help="Dry run the transformation")
         ] = False,
@@ -61,8 +70,9 @@ if __name__ == "__main__":
                 from transforms.engine.duckdb import init_sess
 
                 session = init_sess()
-            if engine ==Engine.sparksail:
+            if engine == Engine.sparksail:
                 from transforms.engine.spark_sail import init_sess
+
                 session = init_sess(sail_server_url)
             else:
                 from transforms.engine.spark import init_sess

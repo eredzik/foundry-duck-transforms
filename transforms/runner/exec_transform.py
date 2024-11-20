@@ -9,8 +9,8 @@ from transforms.runner.data_sink.base import DataSink
 from transforms.runner.data_source.base import DataSource
 
 from .exec_check import execute_check
-
-
+import logging
+logger = logging.getLogger(__name__)
 @dataclass
 class TransformRunner:
     sourcer:DataSource
@@ -63,8 +63,9 @@ class TransformRunner:
             transform.multi_outputs = impl_multi_outputs
             
         
-
+        logger.info("Starting transform")
         res = transform.transform(**sources).cache()
+        logger.info("Finished transform")
         
         
         if transform.multi_outputs is None:
