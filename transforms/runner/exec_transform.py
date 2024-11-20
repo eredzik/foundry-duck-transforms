@@ -72,10 +72,14 @@ class TransformRunner:
             res: DataFrame
             if not omit_checks:
                 for check in transform.outputs["output"].checks:
+                    logger.info(f"Running check {check.description}")
                     execute_check(res if not dry_run else res.limit(1), check)
+                    logger.info(f"Check {check.description} finished")
             if not (dry_run):
+                logger.info(f"Saving transaction to {transform.outputs['output'].path_or_rid}")
                 self.sink.save_transaction(df = res,dataset_path_or_rid=transform.outputs['output'].path_or_rid) 
-                
+                logger.info("Transaction saved successfully")
+            
             
             else:
                 res.limit(1).collect()
