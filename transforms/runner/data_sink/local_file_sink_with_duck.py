@@ -5,6 +5,8 @@ from typing import Callable
 import duckdb
 from pyspark.sql import DataFrame
 
+from ...generate_types import generate_from_spark
+
 from .local_file_sink import LocalFileSink
 
 
@@ -23,8 +25,10 @@ class LocalFileSinkWithDuck(LocalFileSink):
     ) -> None:
         super().save_transaction(df=df, dataset_path_or_rid=dataset_path_or_rid)
         self.conn = duckdb.connect(self.duckdb_path, config={})
+        dataset_name = self.get_dataset_dataset_name(dataset_path_or_rid)
+        generate_from_spark(dataset_name, df)
         self.conn.execute(
-            f"CREATE OR REPLACE VIEW {self.get_dataset_dataset_name(dataset_path_or_rid)} as select * from read_parquet('{self.output_dir}/{self.branch}/{dataset_path_or_rid}/*.parquet')" 
+            f"CREATE OR REPLACE VIEW {dataset_name} as select * from read_parquet('{self.output_dir}/{self.branch}/{dataset_path_or_rid}/*.parquet')" 
         )
 
     def save_incremental_transaction(

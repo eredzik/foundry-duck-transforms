@@ -5,6 +5,8 @@ from typing import TYPE_CHECKING, Callable
 
 import duckdb
 
+from ...generate_types import generate_from_spark
+
 from .foundry_source import FoundrySource
 
 if TYPE_CHECKING:
@@ -23,13 +25,16 @@ class FoundrySourceWithDuck(FoundrySource):
         sanitized_branch = re.sub("[^0-9a-zA-Z]+", "_", branch)
         
         self.conn.execute(f"create schema if not exists {sanitized_branch}")
+        dataset_name =self.get_dataset_dataset_name(dataset_path_or_rid)
+        generate_from_spark(dataset_name, df)
+        
         if self.last_path.endswith(".parquet"):
             self.conn.execute(
-                f"CREATE OR REPLACE VIEW {sanitized_branch}.{self.get_dataset_dataset_name(dataset_path_or_rid)} as select * from read_parquet('{self.last_path}/spark/*.parquet')"
+                f"CREATE OR REPLACE VIEW {sanitized_branch}.{dataset_name} as select * from read_parquet('{self.last_path}/spark/*.parquet')"
             )
         elif self.last_path.endswith(".csv"):
             self.conn.execute(
-                f"CREATE OR REPLACE VIEW {sanitized_branch}.{self.get_dataset_dataset_name(dataset_path_or_rid)} as select * from read_csv('{self.last_path}/*.csv')"
+                f"CREATE OR REPLACE VIEW {sanitized_branch}.{dataset_name} as select * from read_csv('{self.last_path}/*.csv')"
             )
         else:
             raise NotImplementedError(
