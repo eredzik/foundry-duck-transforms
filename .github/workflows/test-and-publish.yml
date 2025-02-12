@@ -1,0 +1,98 @@
+name: Test and Publish
+
+on:
+  push:
+    branches: [master]
+  pull_request:
+    branches: [master]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        python-version: ["3.11", "3.12"]
+
+    steps:
+      - uses: actions/checkout@v3
+
+      - name: Set up Python ${{ matrix.python-version }}
+        uses: actions/setup-python@v4
+        with:
+          python-version: ${{ matrix.python-version }}
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install pyright
+          pip install -e .
+
+      # - name: Type check with PyRight
+      #   run: |
+      #     pyright tests/sql/test_functions_types.py
+
+  create-release:
+    needs: test
+    if: github.event_name == 'push' && github.ref == 'refs/heads/master'
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.bump_version.outputs.new_version }}
+
+    steps:
+      - uses: actions/checkout@v3
+        with:
+          fetch-depth: 0
+
+      - name: Bump version
+        id: bump_version
+        run: |
+          # Get the current version from pyproject.toml
+          current_version=$(grep -Po "(?<=version = \")[^\"]*" pyproject.toml)
+          # Bump patch version
+          new_version=$(echo $current_version | awk -F. '{$NF = $NF + 1;} 1' | sed 's/ /./g')
+          # Update version in pyproject.toml
+          sed -i "s/version = \"${current_version}\"/version = \"${new_version}\"/" pyproject.toml
+          echo "new_version=${new_version}" >> "$GITHUB_OUTPUT"
+
+      - name: Create Release
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          git config --local user.email "action@github.com"
+          git config --local user.name "GitHub Action"
+          git add pyproject.toml
+          git commit -m "Bump version to ${{ steps.bump_version.outputs.new_version }}"
+          git tag v${{ steps.bump_version.outputs.new_version }}
+          git push && git push --tags
+          gh release create v${{ steps.bump_version.outputs.new_version }} \
+            --title "Release v${{ steps.bump_version.outputs.new_version }}" \
+            --generate-notes
+
+  publish:
+    needs: create-release
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v3
+        with:
+          ref: v${{ needs.create-release.outputs.version }}
+
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: "3.11"
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install build twine
+
+      - name: Build package
+        run: python -m build
+
+      - name: Publish to PyPI
+        env:
+          TWINE_USERNAME: __token__
+          TWINE_PASSWORD: ${{ secrets.PYPI_API_TOKEN }}
+        run: |
+          twine upload dist/*
