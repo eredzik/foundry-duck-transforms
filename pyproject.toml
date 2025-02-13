@@ -27,6 +27,7 @@ dependencies = [
     'typer',
     'pyarrow',
     'foundry-dev-tools',
+    'asyncer',
 ]
 version = "0.1.0"
 

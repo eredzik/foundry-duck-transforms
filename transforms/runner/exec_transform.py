@@ -1,7 +1,8 @@
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Literal
-
+from asyncio import gather
+from asyncer import syncify
 from pyspark.sql import DataFrame
 
 from transforms.api.transform_df import Transform, TransformOutput
@@ -22,20 +23,22 @@ class TransformRunner:
     def __post_init__(self):
         self.output_dir.mkdir(parents=True, exist_ok=True)
 
-    def exec_transform(self, transform: Transform, omit_checks: bool, dry_run:bool) -> None:
-        sources = {}
-
-        for argname, input in transform.inputs.items():
-            branches = [
+    async def download_datasets(self, transform: Transform, omit_checks: bool, dry_run:bool) -> dict[str, DataFrame]:
+        sources: dict[str, DataFrame] = {}
+        futures_list = [(argname,self.sourcer.download_for_branches(input.path_or_rid, branches=[
                 b for b in ([input.branch] + self.fallback_branches) if b is not None
-            ]
-            sources[argname] = self.sourcer.download_for_branches(
-                input.path_or_rid, branches=branches
-            )
-        if transform.external_systems is not None:
-            for external_system in transform.external_systems:
-                transform.external_systems[external_system].secrets_config_location = str(self.secrets_config_location)
-                sources[external_system] = transform.external_systems[external_system]
+            ])) for argname, input in transform.inputs.items()]
+        futures = [fut for (_, fut) in futures_list]
+        names = [name for (name, _) in futures_list]
+        dfs: list[DataFrame] = await gather(*futures)
+        for argname, res_df in zip(names, dfs):
+            sources[argname] = res_df
+        return sources
+            
+        
+    def exec_transform(self, transform: Transform, omit_checks: bool, dry_run:bool) -> None:
+        
+        sources = syncify(self.download_datasets)(transform, omit_checks, dry_run)
         if transform.multi_outputs is not None:
             impl_multi_outputs = {}
             for argname, output in transform.outputs.items():

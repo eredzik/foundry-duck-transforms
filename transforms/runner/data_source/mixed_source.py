@@ -9,20 +9,20 @@ class MixedDataSource(DataSource):
     sources: dict[str, DataSource] 
     fallback_source: DataSource | None
     
-    def download_dataset(self, dataset_path_or_rid: str, branch: str):
+    async def download_dataset(self, dataset_path_or_rid: str, branch: str):
         source = self.sources.get(branch)
         if source is None:
             if self.fallback_source is None:
                 raise BranchNotFoundError('SOURCE')
             source = self.fallback_source
-        return source.download_dataset(dataset_path_or_rid, branch=branch)
+        return await source.download_dataset(dataset_path_or_rid, branch=branch)
 
         
 
-    def download_for_branches(self, dataset_path_or_rid: str, branches: list[str]):
+    async def download_for_branches(self, dataset_path_or_rid: str, branches: list[str]):
         for branch in branches:
             try:
-                return self.download_dataset(dataset_path_or_rid, branch=branch)
+                return await self.download_dataset(dataset_path_or_rid, branch=branch)
 
             except BranchNotFoundError as e:
                 logger.info(f"[{e.source}] Branch [{branch}] not found for dataset [{dataset_path_or_rid}]")

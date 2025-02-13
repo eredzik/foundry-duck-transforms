@@ -7,7 +7,7 @@ from foundry_dev_tools.utils.caches.spark_caches import (
     _validate_cache_key,
 )
 from pyspark.sql import DataFrame, SparkSession
-
+from asyncer import asyncify
 from transforms.runner.data_source.base import (
     BranchNotFoundError as BranchNotFoundErrorBase,
 )
@@ -19,15 +19,15 @@ class FoundrySource(DataSource):
     ctx: FoundryContext
     session: SparkSession
 
-    def download_dataset(self, dataset_path_or_rid: str, branch: str) -> DataFrame:
+    async def download_dataset(self, dataset_path_or_rid: str, branch: str) -> DataFrame:
         try:
-            dataset_identity = self.ctx.cached_foundry_client._get_dataset_identity(
+            dataset_identity = await asyncify(self.ctx.cached_foundry_client._get_dataset_identity)(
                 dataset_path_or_rid, branch
             )
             if dataset_identity.get("last_transaction") is None:
                 raise BranchNotFoundErrorBase("FOUNDRY")
 
-            last_path, dataset_identity = self.ctx.cached_foundry_client.fetch_dataset(
+            last_path, dataset_identity = await asyncify(self.ctx.cached_foundry_client.fetch_dataset)(
                 dataset_path_or_rid, branch
             )
             self.last_path = last_path
@@ -48,7 +48,7 @@ class FoundrySource(DataSource):
                         f"select * from `{dataset_path_or_rid}`",
                         branch=branch,
                         return_type="spark",
-                    )
+                    ) 
                     return df
                 raise NotImplementedError(f"Format {inferred_format} is not supported")
 
@@ -61,9 +61,9 @@ class FoundrySource(DataSource):
             )
             raise BranchNotFoundErrorBase("FOUNDRY")
 
-    def download_for_branches(self, dataset_path_or_rid: str, branches: list[str]):
+    async def download_for_branches(self, dataset_path_or_rid: str, branches: list[str]):
         for branch in branches:
-            return self.download_dataset(dataset_path_or_rid, branch=branch)
+            return await self.download_dataset(dataset_path_or_rid, branch=branch)
 
         raise BranchNotFoundErrorBase("FOUNDRY")
 
