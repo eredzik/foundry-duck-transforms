@@ -41,7 +41,12 @@ class FoundrySource(DataSource):
                     dataset_identity, inferred_format
                 )
                 if inferred_format == "parquet":
-                    return self.session.read.parquet(str(path.joinpath("spark", "*")))
+                    try:
+                        return self.session.read.parquet(str(path.joinpath("*.parquet")))
+                    except Exception as e:
+                        
+                        # Exception for partitioned parquet files - mostly for duckdb compat
+                        return self.session.read.parquet(str(path.joinpath("**", "*.parquet")))
                 elif inferred_format == "csv":
                     ds = self.ctx.get_dataset(dataset_path_or_rid)
                     df: "DataFrame" = ds._context.foundry_sql_server.query_foundry_sql(
