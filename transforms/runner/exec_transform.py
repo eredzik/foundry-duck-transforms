@@ -38,7 +38,7 @@ class TransformRunner:
         
     def exec_transform(self, transform: Transform, omit_checks: bool, dry_run:bool) -> None:
         
-        sources = syncify(self.download_datasets)(transform, omit_checks, dry_run)
+        sources = syncify(self.download_datasets, raise_sync_error=False)(transform, omit_checks, dry_run)
         if transform.multi_outputs is not None:
             impl_multi_outputs = {}
             for argname, output in transform.outputs.items():
