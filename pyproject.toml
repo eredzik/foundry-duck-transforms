@@ -29,7 +29,7 @@ dependencies = [
     'foundry-dev-tools',
     'asyncer',
 ]
-version = "0.1.3"
+version = "0.1.4"
 
 [build-system]
 requires = ["hatchling"]
