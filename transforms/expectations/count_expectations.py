@@ -26,6 +26,8 @@ class CountExpectationBuilder:
         return CountExpectation(value, op.le)
     def eq(self, value: int) -> CountExpectation:
         return CountExpectation(value, op.eq)
+    def equals(self, value: int) -> CountExpectation:
+        return CountExpectation(value, op.eq)
     def neq(self, value: int) -> CountExpectation:
         return CountExpectation(value, op.ne)
     def gt(self, value: int) -> CountExpectation:
