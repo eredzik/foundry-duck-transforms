@@ -17,11 +17,7 @@ class LocalFileSink(DataSink):
         dataset_path_or_rid: str,
     ) -> None:
         result_path = Path(self.output_dir) / self.branch / dataset_path_or_rid
-        if (not result_path.exists()):
-            result_path.mkdir(
-                parents=True,
-                exist_ok=True,
-            )
+        
         df.write.parquet(
             str(result_path),
             mode="overwrite",
