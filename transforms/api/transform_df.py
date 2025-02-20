@@ -23,9 +23,9 @@ class Output:
     def __init__(self, path_or_rid: str, checks: Check | None | list[Check] = None):
         self.path_or_rid = path_or_rid
         if checks is None:
-            checks = []
+            self.checks = []
         elif isinstance(checks, Check):
-            checks = [checks]
+            self.checks = [checks]
         else:
             self.checks = checks
         
