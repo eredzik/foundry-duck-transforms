@@ -1,3 +1,4 @@
+from hashlib import sha256
 import re
 from dataclasses import dataclass
 from pathlib import Path
@@ -17,7 +18,14 @@ if TYPE_CHECKING:
 class FoundrySourceWithDuck(FoundrySource):
     duckdb_path: str = str((Path.home() / ".fndry_duck" / "analytical_db.db"))
     duckdb_path_sql: str = str((Path.home() / ".fndry_duck" / "analytical_db.sql"))
-    get_dataset_dataset_name: Callable[[str], str] = lambda x: x
+    # get_dataset_dataset_name: Callable[[str], str] = lambda x: x
+
+    
+    def get_dataset_name(self,dataset_path_or_rid: str) -> str:
+        dataset_path = str(self.ctx.get_dataset(dataset_path_or_rid).path)
+        sha_addon = sha256(dataset_path.encode()).hexdigest()[:2]
+        dataset_name = dataset_path.split("/")[-1]
+        return f"{dataset_name}_{sha_addon}"
 
     async def download_dataset(
         self, dataset_path_or_rid: str, branch: str
@@ -27,7 +35,7 @@ class FoundrySourceWithDuck(FoundrySource):
         sanitized_branch = re.sub("[^0-9a-zA-Z]+", "_", branch)
 
         self.conn.execute(f"create schema if not exists {sanitized_branch}")
-        dataset_name = self.get_dataset_dataset_name(dataset_path_or_rid)
+        dataset_name = self.get_dataset_name(dataset_path_or_rid)
         generate_from_spark(dataset_name, df)
 
         if self.last_path.endswith(".parquet"):

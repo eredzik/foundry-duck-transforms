@@ -1,6 +1,6 @@
 import importlib.util
 import sys
-from hashlib import sha256
+
 from typing import Any
 
 from foundry_dev_tools import FoundryContext
@@ -23,32 +23,39 @@ def execute_with_default_foundry(
     session: SparkSession,
     dry_run: bool,
     local_dev_branch_name: str,
+    transform_name: str | None = None,
 ):
     mod = import_from_path("transform", transform_to_run)
     transforms: dict[str, Transform | Any] = {}
     for name, item in mod.__dict__.items():
         if isinstance(item, Transform):
             transforms[name] = item
-    if len(transforms) > 1:
-        print("There is more than one transform specified. Please specify its name")
-        print("names are", list(transforms.keys()))
-        return
-    if len(transforms) == 0:
+
+    if not transforms:
         print("file has no transforms")
         return
 
+    if transform_name is not None:
+        if transform_name not in transforms:
+            print(
+                f"Transform '{transform_name}' not found in module. "
+                f"Available transforms: {list(transforms.keys())}"
+            )
+            return
+        selected_transform: Transform = transforms[transform_name]  # type: ignore[assignment]
+    else:
+        if len(transforms) > 1:
+            print("There is more than one transform specified. Please specify its name.")
+            print("names are", list(transforms.keys()))
+            return
+        selected_transform = list(transforms.values())[0]  # type: ignore[assignment]
+
     branches = fallback_branches.split(",")
     all_branches = [local_dev_branch_name] + branches
-    fndry_ctx = FoundryContext()
 
-    def get_dataset_name(dataset_path_or_rid: str) -> str:
-        dataset_path = str(fndry_ctx.get_dataset(dataset_path_or_rid).path)
-        sha_addon = sha256(dataset_path.encode()).hexdigest()[:2]
-        dataset_name = dataset_path.split("/")[-1]
-        return f"{dataset_name}_{sha_addon}"
 
     foundry_source = FoundrySourceWithDuck(
-        ctx=FoundryContext(), session=session, get_dataset_dataset_name=get_dataset_name
+        ctx=FoundryContext(), session=session, 
     )
     local_source = LocalDataSource(session=session)
     sources_mapping: dict[str, DataSource] = {b: foundry_source for b in branches}
@@ -56,7 +63,7 @@ def execute_with_default_foundry(
 
     TransformRunner(
         sink=LocalFileSinkWithDuck(
-            branch=local_dev_branch_name, get_dataset_dataset_name=get_dataset_name
+            branch=local_dev_branch_name, 
         ),
         sourcer=MixedDataSource(
             sources=sources_mapping,
@@ -64,7 +71,7 @@ def execute_with_default_foundry(
         ),
         fallback_branches=all_branches,
     ).exec_transform(
-        list(transforms.values())[0],
+        selected_transform,
         omit_checks=omit_checks,
         dry_run=dry_run,
     )

@@ -4,3 +4,9 @@ autostubs/
 test_lib.py
 .vscode/
 __pycache__/
+.coverage
+.env
+*.csv
+*.parquet
+*.tar.gz
+*.whl

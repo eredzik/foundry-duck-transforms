@@ -34,11 +34,21 @@ class SchemaExpectation(Expectation):
                     f"Schema of the dataframe is not as expected. Missing columns: {diff}"
                 )
 
+@dataclass
+class SchemaContainsExpectation(Expectation):
+    expected_schema: Mapping[str, "DataType"] 
+
+    def run(self, dataframe_to_verify: "DataFrame"):
+        diff = set(self.expected_schema).difference(dataframe_to_verify.columns)
+        if len(diff) > 0:
+            raise AssertionError(
+                f"Schema of the dataframe is not as expected. Missing columns: {diff}"
+            )
 
 @dataclass
 class SchemaBuilder:
     equals = SchemaExpectation
-
+    contains = SchemaContainsExpectation
 
 class PrimaryKeyExpectation(Expectation):
     def __init__(self, *pk: str):

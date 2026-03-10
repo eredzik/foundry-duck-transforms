@@ -51,6 +51,14 @@ if __name__ == "__main__":
         omit_checks: Annotated[
             bool, typer.Option(help="Disables checks running")
         ] = False,
+        transform_name: Annotated[
+            Optional[str],
+            typer.Option(
+                "--transform-name",
+                help="Name of the transform function in the module to execute "
+                     "(required if the module defines multiple transforms)",
+            ),
+        ] = None,
         engine: Annotated[
             Engine,
             typer.Option(help="Engine to use for the transformation"),
@@ -85,6 +93,7 @@ if __name__ == "__main__":
             execute_with_default_foundry(
                 dry_run=dry_run,
                 fallback_branches=fallback_branches,
+                transform_name=transform_name,
                 session=session,
                 local_dev_branch_name=local_dev_branch_name,
                 omit_checks=omit_checks,
