@@ -36,7 +36,15 @@ class TransformRunner:
             sources[argname] = res_df
         return sources
             
-    def exec_transform(self, transform: Transform, omit_checks: bool, dry_run: bool, sources: Optional[Dict[str, Union[DataFrame, TransformOutput]]] = None) -> None:
+    def exec_transform(
+        self,
+        transform: Transform,
+        omit_checks: bool,
+        dry_run: bool,
+        sources: Optional[Dict[str, Union[DataFrame, TransformOutput]]] = None,
+        lineage_collector: Any | None = None,
+        lineage_mode: bool = False,
+    ) -> None:
         if sources is None:
             sources = syncify(self.download_datasets, raise_sync_error=False)(transform, omit_checks, dry_run)
             
@@ -62,6 +70,10 @@ class TransformRunner:
                         if mode == "append":
                             raise NotImplementedError()
                         else:
+                            if lineage_collector is not None:
+                                lineage_collector.record_output(output_path, df)
+                            if lineage_mode and hasattr(self.sourcer, "register_output"):
+                                self.sourcer.register_output(output_path, df)  # type: ignore[attr-defined]
                             if not omit_checks:
                                 for check in output.checks: 
                                     execute_check(df, check)
@@ -72,11 +84,12 @@ class TransformRunner:
                                     transform.incremental_opts.semantic_version
                                 )
                             else:
-                                logger.info(f"Saving output to {output_path}")
-                                self.sink.save_transaction(
-                                    df=df,
-                                    dataset_path_or_rid=output_path
-                                )
+                                if not lineage_mode and not dry_run:
+                                    logger.info(f"Saving output to {output_path}")
+                                    self.sink.save_transaction(
+                                        df=df,
+                                        dataset_path_or_rid=output_path
+                                    )
                     return on_dataframe_write
 
                 output_df_impl = TransformOutput(
@@ -94,21 +107,31 @@ class TransformRunner:
         logger.info("Finished transform")
         
         if transform.multi_outputs is None:
-            # Accept any DataFrame-like object (including engine-specific SQLFrame DataFrames)
-            if not hasattr(res, "limit") or not hasattr(res, "collect"):
-                raise ValueError("Transform without multi_outputs must return a DataFrame-like object")
+            # In lineage mode, we don't require Spark actions; we only need lineage metadata.
+            if not lineage_mode:
+                # Accept any DataFrame-like object (including engine-specific SQLFrame DataFrames)
+                if not hasattr(res, "limit") or not hasattr(res, "collect"):
+                    raise ValueError(
+                        "Transform without multi_outputs must return a DataFrame-like object"
+                    )
+
+            if lineage_collector is not None:
+                lineage_collector.record_output(transform.outputs["output"].path_or_rid, res)
+            if lineage_mode and hasattr(self.sourcer, "register_output"):
+                self.sourcer.register_output(transform.outputs["output"].path_or_rid, res)  # type: ignore[attr-defined]
             
             if not omit_checks:
                 for check in transform.outputs["output"].checks:
                     logger.info(f"Running check {check.description}")
                     execute_check(res if not dry_run else res.limit(1), check)
                     logger.info(f"Check {check.description} finished")
-            if not dry_run:
+            if not lineage_mode and not dry_run:
                 logger.info(f"Saving transaction to {transform.outputs['output'].path_or_rid}")
                 self.sink.save_transaction(df=res, dataset_path_or_rid=transform.outputs['output'].path_or_rid)
                 logger.info("Transaction saved successfully")
             else:
-                res.limit(1).collect()
+                if not lineage_mode:
+                    res.limit(1).collect()
         else:
             if transform.incremental_opts is not None:
                 logger.info("Finished transform successfully")

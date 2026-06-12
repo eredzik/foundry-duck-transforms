@@ -10,3 +10,4 @@ __pycache__/
 *.parquet
 *.tar.gz
 *.whl
+ui-dist/
