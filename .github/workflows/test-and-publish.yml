@@ -45,12 +45,16 @@ jobs:
       - name: Bump version
         id: bump_version
         run: |
-          # Get the current version from pyproject.toml
-          current_version=$(grep -Po "(?<=version = \")[^\"]*" pyproject.toml)
+          # Get the current version from pyproject.toml (line-anchored to avoid minversion/python_version)
+          current_version=$(grep -Po '^version = "\K[^"]+' pyproject.toml)
+          if [ -z "$current_version" ]; then
+            echo "Could not find version in pyproject.toml" >&2
+            exit 1
+          fi
           # Bump patch version
-          new_version=$(echo $current_version | awk -F. '{$NF = $NF + 1;} 1' | sed 's/ /./g')
+          new_version=$(echo "$current_version" | awk -F. '{$NF = $NF + 1;} 1' OFS='.')
           # Update version in pyproject.toml
-          sed -i "s/version = \"${current_version}\"/version = \"${new_version}\"/" pyproject.toml
+          sed -i "s/^version = \"${current_version}\"/version = \"${new_version}\"/" pyproject.toml
           echo "new_version=${new_version}" >> "$GITHUB_OUTPUT"
 
       - name: Create Release
