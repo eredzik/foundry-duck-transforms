@@ -1,3 +1,4 @@
+import time
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Literal, Union, Dict, Optional, Any
@@ -8,6 +9,12 @@ from pyspark.sql import DataFrame
 from transforms.api.transform_df import Transform, TransformOutput
 from transforms.runner.data_sink.base import DataSink
 from transforms.runner.data_source.base import DataSource
+from transforms.runner.dataset_logging import (
+    dataset_display_name,
+    format_elapsed,
+    format_row_count,
+    try_row_count,
+)
 
 from .exec_check import execute_check
 import logging
@@ -24,11 +31,57 @@ class TransformRunner:
     def __post_init__(self):
         self.output_dir.mkdir(parents=True, exist_ok=True)
 
+    def _dataset_label(self, dataset_path_or_rid: str, branch: str | None = None) -> str:
+        if hasattr(self.sourcer, "resolve_dataset_label"):
+            return self.sourcer.resolve_dataset_label(
+                dataset_path_or_rid,
+                branch or (self.fallback_branches[-1] if self.fallback_branches else "master"),
+            )
+        return dataset_display_name(dataset_path_or_rid)
+
+    async def _download_input(
+        self,
+        argname: str,
+        dataset_path_or_rid: str,
+        branches: list[str],
+    ) -> DataFrame:
+        label = self._dataset_label(dataset_path_or_rid, branches[-1])
+        logger.info(
+            "Loading input '%s': %s (branches: %s)",
+            argname,
+            label,
+            ", ".join(branches),
+        )
+        started = time.perf_counter()
+        df = await self.sourcer.download_for_branches(dataset_path_or_rid, branches)
+        rows = try_row_count(df)
+        logger.info(
+            "Loaded input '%s': %s in %s (%s)",
+            argname,
+            label,
+            format_elapsed(time.perf_counter() - started),
+            format_row_count(rows),
+        )
+        return df
+
     async def download_datasets(self, transform: Transform, omit_checks: bool, dry_run: bool) -> Dict[str, Union[DataFrame, TransformOutput]]:
         sources: Dict[str, Union[DataFrame, TransformOutput]] = {}
-        futures_list = [(argname, self.sourcer.download_for_branches(input.path_or_rid, branches=[
-                b for b in ([input.branch] + self.fallback_branches) if b is not None
-            ])) for argname, input in transform.inputs.items()]
+        if transform.inputs:
+            logger.info(
+                "Preparing %d input dataset(s) for transform",
+                len(transform.inputs),
+            )
+        futures_list = [
+            (
+                argname,
+                self._download_input(
+                    argname,
+                    input.path_or_rid,
+                    [b for b in ([input.branch] + self.fallback_branches) if b is not None],
+                ),
+            )
+            for argname, input in transform.inputs.items()
+        ]
         futures = [fut for (_, fut) in futures_list]
         names = [name for (name, _) in futures_list]
         dfs: list[DataFrame] = await gather(*futures)
@@ -56,14 +109,17 @@ class TransformRunner:
                         )
                     raise ValueError(f"Invalid mode {mode} or missing incremental options")
 
-                # Create a closure to capture the current output variable
-                def create_write_fn(output_path: str):
+                def create_write_fn(
+                    output_path: str,
+                    output_argname: str,
+                    output_checks: list,
+                ):
                     def on_dataframe_write(df: DataFrame, mode: Literal["append", "replace"]) -> None:
                         if mode == "append":
                             raise NotImplementedError()
                         else:
                             if not omit_checks:
-                                for check in output.checks: 
+                                for check in output_checks:
                                     execute_check(df, check)
                             if (transform.incremental_opts is not None) and (not dry_run):
                                 self.sink.save_incremental_transaction(
@@ -72,16 +128,32 @@ class TransformRunner:
                                     transform.incremental_opts.semantic_version
                                 )
                             else:
-                                logger.info(f"Saving output to {output_path}")
+                                label = self._dataset_label(output_path)
+                                rows = try_row_count(df)
+                                logger.info(
+                                    "Writing output '%s': %s (%s)",
+                                    output_argname,
+                                    label,
+                                    format_row_count(rows),
+                                )
+                                started = time.perf_counter()
                                 self.sink.save_transaction(
                                     df=df,
-                                    dataset_path_or_rid=output_path
+                                    dataset_path_or_rid=output_path,
+                                )
+                                logger.info(
+                                    "Finished writing output '%s': %s in %s",
+                                    output_argname,
+                                    label,
+                                    format_elapsed(time.perf_counter() - started),
                                 )
                     return on_dataframe_write
 
                 output_df_impl = TransformOutput(
                     on_dataframe_req=on_dataframe_req,
-                    on_dataframe_write=create_write_fn(output.path_or_rid)
+                    on_dataframe_write=create_write_fn(
+                        output.path_or_rid, argname, output.checks
+                    ),
                 )
                 impl_multi_outputs[argname] = output_df_impl
                 sources[argname] = output_df_impl
@@ -89,9 +161,26 @@ class TransformRunner:
             # Set the multi_outputs dictionary with our implementations
             transform.multi_outputs = impl_multi_outputs
         
-        logger.info("Starting transform")
+        if transform.outputs:
+            for argname, output in transform.outputs.items():
+                logger.info(
+                    "Prepared output '%s': %s",
+                    argname,
+                    self._dataset_label(output.path_or_rid),
+                )
+
+        transform_fn = transform.transform
+        while hasattr(transform_fn, "__wrapped__"):
+            transform_fn = transform_fn.__wrapped__
+        transform_name = getattr(transform_fn, "__name__", "transform")
+        logger.info("Starting transform '%s'", transform_name)
+        transform_started = time.perf_counter()
         res = transform.transform(**sources)
-        logger.info("Finished transform")
+        logger.info(
+            "Finished transform '%s' in %s",
+            transform_name,
+            format_elapsed(time.perf_counter() - transform_started),
+        )
         
         if transform.multi_outputs is None:
             # Accept any DataFrame-like object (including engine-specific SQLFrame DataFrames)
@@ -104,9 +193,21 @@ class TransformRunner:
                     execute_check(res if not dry_run else res.limit(1), check)
                     logger.info(f"Check {check.description} finished")
             if not dry_run:
-                logger.info(f"Saving transaction to {transform.outputs['output'].path_or_rid}")
-                self.sink.save_transaction(df=res, dataset_path_or_rid=transform.outputs['output'].path_or_rid)
-                logger.info("Transaction saved successfully")
+                output_path = transform.outputs["output"].path_or_rid
+                label = self._dataset_label(output_path)
+                rows = try_row_count(res)
+                logger.info(
+                    "Writing output: %s (%s)",
+                    label,
+                    format_row_count(rows),
+                )
+                started = time.perf_counter()
+                self.sink.save_transaction(df=res, dataset_path_or_rid=output_path)
+                logger.info(
+                    "Finished writing output: %s in %s",
+                    label,
+                    format_elapsed(time.perf_counter() - started),
+                )
             else:
                 res.limit(1).collect()
         else:

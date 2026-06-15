@@ -1,14 +1,18 @@
 from hashlib import sha256
+import logging
 import re
 from dataclasses import dataclass
 from pathlib import Path
-from typing import TYPE_CHECKING, Callable
+from typing import TYPE_CHECKING
 
 import duckdb
 
 from ...generate_types import generate_from_spark
+from transforms.runner.dataset_logging import log_dataset_phase
 
 from .foundry_source import FoundrySource
+
+logger = logging.getLogger(__name__)
 
 if TYPE_CHECKING:
     from pyspark.sql import DataFrame
@@ -21,35 +25,44 @@ class FoundrySourceWithDuck(FoundrySource):
     # get_dataset_dataset_name: Callable[[str], str] = lambda x: x
 
     
-    def get_dataset_name(self,dataset_path_or_rid: str) -> str:
+    def get_dataset_name(self, dataset_path_or_rid: str) -> str:
         dataset_path = str(self.ctx.get_dataset(dataset_path_or_rid).path)
         sha_addon = sha256(dataset_path.encode()).hexdigest()[:2]
-        dataset_name = dataset_path.split("/")[-1]
+        raw_name = dataset_path.split("/")[-1]
+        dataset_name = re.sub("[^a-zA-Z0-9_]", "_", raw_name).lower()
         return f"{dataset_name}_{sha_addon}"
 
     async def download_dataset(
         self, dataset_path_or_rid: str, branch: str
     ) -> "DataFrame":
         df = await super().download_dataset(dataset_path_or_rid, branch)
-        self.conn = duckdb.connect(self.duckdb_path)
+        label = self.resolve_dataset_label(dataset_path_or_rid, branch)
+        dataset_name = self.get_dataset_name(dataset_path_or_rid)
         sanitized_branch = re.sub("[^0-9a-zA-Z]+", "_", branch)
 
-        self.conn.execute(f"create schema if not exists {sanitized_branch}")
-        dataset_name = self.get_dataset_name(dataset_path_or_rid)
-        generate_from_spark(dataset_name, df)
+        with log_dataset_phase(
+            "duckdb view registration",
+            label,
+            log=logger,
+            branch=branch,
+            view=f"{sanitized_branch}.{dataset_name}",
+        ):
+            self.conn = duckdb.connect(self.duckdb_path)
+            self.conn.execute(f"create schema if not exists {sanitized_branch}")
+            generate_from_spark(dataset_name, df)
 
-        if self.last_path.endswith(".parquet"):
-            self.conn.execute(
-                f"CREATE OR REPLACE VIEW {sanitized_branch}.{dataset_name} as select * from read_parquet('{self.last_path}/**/*.parquet')"
-            )
-        elif self.last_path.endswith(".csv"):
-            self.conn.execute(
-                f"CREATE OR REPLACE VIEW {sanitized_branch}.{dataset_name} as select * from read_csv('{self.last_path}/*.csv')"
-            )
-        else:
-            raise NotImplementedError(
-                f"Format {self.last_path.split('.')[-1]} is not supported"
-            )
+            if self.last_path.endswith(".parquet"):
+                self.conn.execute(
+                    f"CREATE OR REPLACE VIEW {sanitized_branch}.{dataset_name} as select * from read_parquet('{self.last_path}/**/*.parquet')"
+                )
+            elif self.last_path.endswith(".csv"):
+                self.conn.execute(
+                    f"CREATE OR REPLACE VIEW {sanitized_branch}.{dataset_name} as select * from read_csv('{self.last_path}/*.csv')"
+                )
+            else:
+                raise NotImplementedError(
+                    f"Format {self.last_path.split('.')[-1]} is not supported"
+                )
         with open(self.duckdb_path_sql, "w") as f:
             for row in self.conn.query(
                 f"select schema_name from information_schema.schemata where catalog_name = '{Path(self.duckdb_path).stem}'"

@@ -1,4 +1,5 @@
 from dataclasses import dataclass
+from functools import wraps
 from typing import TYPE_CHECKING, Any, Callable, Concatenate, Literal, ParamSpec
 
 from pyspark.sql import DataFrame, SparkSession
@@ -91,6 +92,15 @@ class TransformOutput:
     def write_dataframe(self, df: DataFrame):
         return self.on_dataframe_write(df, self.mode_state)
 
+    def write_table(self, table: Any) -> None:
+        if isinstance(table, TransformInput):
+            df = table.df
+        elif hasattr(table, "dataframe") and not isinstance(table, DataFrame):
+            df = table.dataframe()  # type: ignore[union-attr]
+        else:
+            df = table
+        return self.write_dataframe(df)
+
 
 def transform(**kwargs: Input | Output):
     def _transform(transform: Callable[..., Any]):
@@ -104,6 +114,7 @@ def transform(**kwargs: Input | Output):
             if isinstance(arg, Output):
                 outputs[key] = arg
 
+        @wraps(transform)
         def transformed_transform(**kwargs: DataFrame | Source | TransformOutput) -> None:
             new_kwargs: dict[str, TransformInput|Source| TransformOutput] = {}
             for key, value in kwargs.items():

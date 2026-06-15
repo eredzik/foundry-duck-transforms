@@ -63,7 +63,8 @@ def execute_with_default_foundry(
 
     TransformRunner(
         sink=LocalFileSinkWithDuck(
-            branch=local_dev_branch_name, 
+            branch=local_dev_branch_name,
+            resolve_dataset_label=foundry_source.resolve_dataset_label,
         ),
         sourcer=MixedDataSource(
             sources=sources_mapping,

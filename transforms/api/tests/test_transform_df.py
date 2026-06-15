@@ -57,3 +57,18 @@ def test_multi_output():
     def some_transform(out1: TransformOutput, df1: TransformInput):
         return df1
     assert some_transform.inputs["df1"] is not None
+
+
+def test_write_table():
+    from transforms.api.transform_df import TransformInput, TransformOutput
+
+    written = []
+    sentinel = object()
+
+    output = TransformOutput(
+        on_dataframe_req=lambda mode: sentinel,
+        on_dataframe_write=lambda df, mode: written.append((df, mode)),
+    )
+    output.write_table(TransformInput(df=sentinel))
+
+    assert written == [(sentinel, "replace")]
