@@ -4,7 +4,8 @@ import hashlib
 import json
 import logging
 import os
-from dataclasses import dataclass
+import threading
+from dataclasses import dataclass, field
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any
@@ -29,6 +30,7 @@ from transforms.runner.data_source.base import (
     BranchNotFoundError as BranchNotFoundErrorBase,
 )
 from transforms.runner.data_source.base import DataSource
+from transforms.runner.data_source.download_result import DownloadMetadata, DownloadResult
 from transforms.runner.dataset_logging import (
     dataset_display_name,
     log_dataset_phase,
@@ -45,6 +47,8 @@ class FoundrySource(DataSource):
     ctx: FoundryContext
     session: SparkSession
     settings: DuckTransformsSettings | None = None
+    verbose: bool = False
+    _spark_lock: threading.Lock = field(default_factory=threading.Lock, repr=False)
 
     def __post_init__(self) -> None:
         if self.settings is None:
@@ -195,7 +199,8 @@ class FoundrySource(DataSource):
         age = datetime.now(timezone.utc) - cached_at
         if age > allowed_stale_time:
             return None
-        return self.session.read.parquet(str(parquet_path))
+        with self._spark_lock:
+            return self.session.read.parquet(str(parquet_path))
 
     def _save_query_cache(self, cache_dir: Path, df: DataFrame) -> None:
         cache_dir.mkdir(parents=True, exist_ok=True)
@@ -205,7 +210,7 @@ class FoundrySource(DataSource):
         with cache_dir.joinpath("metadata.json").open("w", encoding="utf-8") as handle:
             json.dump(metadata, handle)
 
-    async def _load_via_source_query(
+    def _load_via_source_query_sync(
         self,
         *,
         dataset_path_or_rid: str,
@@ -213,7 +218,7 @@ class FoundrySource(DataSource):
         identity: dict[str, Any],
         dataset_settings: DatasetSettings,
         label: str,
-    ) -> DataFrame:
+    ) -> DownloadResult:
         assert dataset_settings.source_query is not None
         query = render_source_query(
             dataset_settings.source_query,
@@ -227,6 +232,7 @@ class FoundrySource(DataSource):
             query=query,
         )
         cache_dir = self._query_cache_dir(cache_key)
+        last_path = f"query-cache:{cache_key}"
 
         with log_dataset_phase(
             "SQL source read",
@@ -242,20 +248,34 @@ class FoundrySource(DataSource):
             )
             if cached_df is not None:
                 phase["cache"] = "query-cache"
-                phase["rows"] = try_row_count(cached_df)
-                self.last_path = f"query-cache:{cache_key}"
-                return cached_df
+                phase["rows"] = try_row_count(cached_df, verbose=self.verbose)
+                return DownloadResult(
+                    df=cached_df,
+                    metadata=DownloadMetadata(
+                        dataset_path_or_rid=dataset_path_or_rid,
+                        branch=branch,
+                        last_path=last_path,
+                        is_query_cache=True,
+                    ),
+                )
 
-            df = await asyncify(self.ctx.cached_foundry_client.api.query_foundry_sql)(
+            df = self.ctx.cached_foundry_client.api.query_foundry_sql(
                 query,
                 branch=branch,
                 return_type="spark",
             )
             self._save_query_cache(cache_dir, df)
             phase["cache"] = "miss"
-            phase["rows"] = try_row_count(df)
-            self.last_path = f"query-cache:{cache_key}"
-            return df
+            phase["rows"] = try_row_count(df, verbose=self.verbose)
+            return DownloadResult(
+                df=df,
+                metadata=DownloadMetadata(
+                    dataset_path_or_rid=dataset_path_or_rid,
+                    branch=branch,
+                    last_path=last_path,
+                    is_query_cache=True,
+                ),
+            )
 
     def _load_dataframe_from_cache_path(
         self,
@@ -268,21 +288,24 @@ class FoundrySource(DataSource):
             identity,
         )
         path = cache._get_storage_location(identity, inferred_format)
-        if inferred_format == "parquet":
-            try:
-                return self.session.read.parquet(str(path.joinpath("*.parquet")))
-            except Exception:
-                return self.session.read.parquet(
-                    str(path.joinpath("**", "*.parquet"))
-                )
-        if inferred_format == "csv":
-            try:
-                return self.session.read.csv(str(path.joinpath("*.csv")))
-            except Exception:
-                return self.session.read.csv(str(path.joinpath("**", "*.csv")))
+        with self._spark_lock:
+            if inferred_format == "parquet":
+                try:
+                    return self.session.read.parquet(str(path.joinpath("*.parquet")))
+                except Exception:
+                    return self.session.read.parquet(
+                        str(path.joinpath("**", "*.parquet"))
+                    )
+            if inferred_format == "csv":
+                try:
+                    return self.session.read.csv(str(path.joinpath("*.csv")))
+                except Exception:
+                    return self.session.read.csv(str(path.joinpath("**", "*.csv")))
         raise NotImplementedError(f"Format {inferred_format} is not supported")
 
-    async def download_dataset(self, dataset_path_or_rid: str, branch: str) -> DataFrame:
+    def _download_dataset_sync(
+        self, dataset_path_or_rid: str, branch: str
+    ) -> DownloadResult:
         try:
             online_identity = self._get_online_identity(dataset_path_or_rid, branch)
             if online_identity.get("last_transaction") is None:
@@ -302,7 +325,7 @@ class FoundrySource(DataSource):
             )
 
             if dataset_settings.source_query:
-                return await self._load_via_source_query(
+                return self._load_via_source_query_sync(
                     dataset_path_or_rid=dataset_path_or_rid,
                     branch=branch,
                     identity=identity,
@@ -314,9 +337,7 @@ class FoundrySource(DataSource):
             file_count: int | str = "unknown"
             if not cached:
                 try:
-                    files = await asyncify(
-                        self.ctx.cached_foundry_client.api.list_dataset_files
-                    )(
+                    files = self.ctx.cached_foundry_client.api.list_dataset_files(
                         identity["dataset_rid"],
                         exclude_hidden_files=True,
                         view=branch,
@@ -338,12 +359,11 @@ class FoundrySource(DataSource):
                 source="foundry",
                 files=file_count if not cached else None,
             ) as phase:
-                last_path, identity = await asyncify(self._fetch_dataset_files)(
+                last_path, identity = self._fetch_dataset_files(
                     dataset_path_or_rid,
                     branch,
                     identity,
                 )
-                self.last_path = last_path
                 phase["path"] = last_path
                 _validate_cache_key(identity)
                 df = self._load_dataframe_from_cache_path(identity, last_path)
@@ -351,8 +371,15 @@ class FoundrySource(DataSource):
                     self.ctx.cached_foundry_client.cache.get_cache_dir(),
                     identity,
                 )
-                phase["rows"] = try_row_count(df)
-                return df
+                phase["rows"] = try_row_count(df, verbose=self.verbose)
+                return DownloadResult(
+                    df=df,
+                    metadata=DownloadMetadata(
+                        dataset_path_or_rid=dataset_path_or_rid,
+                        branch=branch,
+                        last_path=last_path,
+                    ),
+                )
 
         except BranchNotFoundError:
             logger.info(
@@ -364,7 +391,16 @@ class FoundrySource(DataSource):
         except FileNotFoundError as exc:
             raise KeyError(str(exc)) from exc
 
-    async def download_for_branches(self, dataset_path_or_rid: str, branches: list[str]):
+    async def download_dataset(
+        self, dataset_path_or_rid: str, branch: str
+    ) -> DownloadResult:
+        return await asyncify(self._download_dataset_sync)(
+            dataset_path_or_rid, branch
+        )
+
+    async def download_for_branches(
+        self, dataset_path_or_rid: str, branches: list[str]
+    ) -> DownloadResult:
         for branch in branches:
             return await self.download_dataset(dataset_path_or_rid, branch=branch)
 

@@ -30,11 +30,18 @@ def format_elapsed(seconds: float) -> str:
 
 def format_row_count(rows: int | None) -> str:
     if rows is None:
-        return "unknown rows"
+        return ""
     return f"{rows:,} rows"
 
 
-def try_row_count(df: Any) -> int | None:
+def format_row_count_suffix(rows: int | None) -> str:
+    formatted = format_row_count(rows)
+    return f" ({formatted})" if formatted else ""
+
+
+def try_row_count(df: Any, *, verbose: bool = False) -> int | None:
+    if not verbose:
+        return None
     if not hasattr(df, "count"):
         return None
     try:

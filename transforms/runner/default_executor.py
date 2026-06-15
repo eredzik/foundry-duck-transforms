@@ -25,6 +25,7 @@ def execute_with_default_foundry(
     dry_run: bool,
     local_dev_branch_name: str,
     transform_name: str | None = None,
+    verbose: bool = False,
 ):
     mod = import_from_path("transform", transform_to_run)
     transforms: dict[str, Transform | Any] = {}
@@ -61,8 +62,9 @@ def execute_with_default_foundry(
         ctx=FoundryContext(),
         session=session,
         settings=settings,
+        verbose=verbose,
     )
-    local_source = LocalDataSource(session=session)
+    local_source = LocalDataSource(session=session, verbose=verbose)
     sources_mapping: dict[str, DataSource] = {b: foundry_source for b in branches}
     sources_mapping[local_dev_branch_name] = local_source
 
@@ -70,12 +72,14 @@ def execute_with_default_foundry(
         sink=LocalFileSinkWithDuck(
             branch=local_dev_branch_name,
             resolve_dataset_label=foundry_source.resolve_dataset_label,
+            verbose=verbose,
         ),
         sourcer=MixedDataSource(
             sources=sources_mapping,
             fallback_source=foundry_source,
         ),
         fallback_branches=all_branches,
+        verbose=verbose,
     ).exec_transform(
         selected_transform,
         omit_checks=omit_checks,

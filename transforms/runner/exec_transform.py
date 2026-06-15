@@ -1,18 +1,20 @@
 import time
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Literal, Union, Dict, Optional, Any
+from typing import Literal, Union, Dict, Optional
 from asyncio import gather
 from asyncer import syncify
 from pyspark.sql import DataFrame
 
 from transforms.api.transform_df import Transform, TransformOutput
+from transforms.generate_types import generate_from_spark_batch
 from transforms.runner.data_sink.base import DataSink
 from transforms.runner.data_source.base import DataSource
+from transforms.runner.data_source.download_result import DownloadMetadata, DownloadResult
 from transforms.runner.dataset_logging import (
     dataset_display_name,
     format_elapsed,
-    format_row_count,
+    format_row_count_suffix,
     try_row_count,
 )
 
@@ -27,6 +29,7 @@ class TransformRunner:
     fallback_branches: list[str] = field(default_factory=list)
     output_dir: Path = Path.home() / ".fndry_duck" / "output"
     secrets_config_location: Path = Path.home() / ".fndry_duck" / "secrets"
+    verbose: bool = False
     
     def __post_init__(self):
         self.output_dir.mkdir(parents=True, exist_ok=True)
@@ -44,7 +47,7 @@ class TransformRunner:
         argname: str,
         dataset_path_or_rid: str,
         branches: list[str],
-    ) -> DataFrame:
+    ) -> DownloadResult:
         label = self._dataset_label(dataset_path_or_rid, branches[-1])
         logger.info(
             "Loading input '%s': %s (branches: %s)",
@@ -53,16 +56,28 @@ class TransformRunner:
             ", ".join(branches),
         )
         started = time.perf_counter()
-        df = await self.sourcer.download_for_branches(dataset_path_or_rid, branches)
-        rows = try_row_count(df)
+        result = await self.sourcer.download_for_branches(dataset_path_or_rid, branches)
         logger.info(
-            "Loaded input '%s': %s in %s (%s)",
+            "Loaded input '%s': %s in %s",
             argname,
             label,
             format_elapsed(time.perf_counter() - started),
-            format_row_count(rows),
         )
-        return df
+        return result
+
+    def _post_process_downloads(self, results: list[DownloadResult]) -> None:
+        metadata_list: list[DownloadMetadata] = [
+            r.metadata for r in results if r.metadata is not None
+        ]
+        type_entries = [
+            (r.metadata.dataset_name, r.df)
+            for r in results
+            if r.metadata is not None and r.metadata.dataset_name is not None
+        ]
+        if type_entries:
+            generate_from_spark_batch(type_entries)
+        if metadata_list and hasattr(self.sourcer, "register_duckdb_views"):
+            self.sourcer.register_duckdb_views(metadata_list)
 
     async def download_datasets(self, transform: Transform, omit_checks: bool, dry_run: bool) -> Dict[str, Union[DataFrame, TransformOutput]]:
         sources: Dict[str, Union[DataFrame, TransformOutput]] = {}
@@ -84,10 +99,21 @@ class TransformRunner:
         ]
         futures = [fut for (_, fut) in futures_list]
         names = [name for (name, _) in futures_list]
-        dfs: list[DataFrame] = await gather(*futures)
-        for argname, res_df in zip(names, dfs):
-            sources[argname] = res_df
+        results: list[DownloadResult] = await gather(*futures)
+        self._post_process_downloads(results)
+        for argname, result in zip(names, results):
+            sources[argname] = result.df
         return sources
+
+    def _download_for_branches_df(
+        self, dataset_path_or_rid: str, branches: list[str]
+    ) -> DataFrame:
+        result = syncify(self.sourcer.download_for_branches, raise_sync_error=False)(
+            dataset_path_or_rid, branches
+        )
+        if result.metadata is not None:
+            self._post_process_downloads([result])
+        return result.df
             
     def exec_transform(self, transform: Transform, omit_checks: bool, dry_run: bool, sources: Optional[Dict[str, Union[DataFrame, TransformOutput]]] = None) -> None:
         if sources is None:
@@ -98,7 +124,7 @@ class TransformRunner:
             for argname, output in transform.outputs.items():
                 def on_dataframe_req(mode: Literal["current", "previous"]) -> DataFrame:
                     if mode == "current":
-                        return syncify(self.sourcer.download_for_branches)(
+                        return self._download_for_branches_df(
                             output.path_or_rid, branches=self.fallback_branches
                         )
                     elif (transform.incremental_opts is not None) and (not dry_run):
@@ -129,12 +155,13 @@ class TransformRunner:
                                 )
                             else:
                                 label = self._dataset_label(output_path)
-                                rows = try_row_count(df)
                                 logger.info(
-                                    "Writing output '%s': %s (%s)",
+                                    "Writing output '%s': %s%s",
                                     output_argname,
                                     label,
-                                    format_row_count(rows),
+                                    format_row_count_suffix(
+                                        try_row_count(df, verbose=self.verbose)
+                                    ),
                                 )
                                 started = time.perf_counter()
                                 self.sink.save_transaction(
@@ -158,7 +185,6 @@ class TransformRunner:
                 impl_multi_outputs[argname] = output_df_impl
                 sources[argname] = output_df_impl
             
-            # Set the multi_outputs dictionary with our implementations
             transform.multi_outputs = impl_multi_outputs
         
         if transform.outputs:
@@ -183,7 +209,6 @@ class TransformRunner:
         )
         
         if transform.multi_outputs is None:
-            # Accept any DataFrame-like object (including engine-specific SQLFrame DataFrames)
             if not hasattr(res, "limit") or not hasattr(res, "collect"):
                 raise ValueError("Transform without multi_outputs must return a DataFrame-like object")
             
@@ -195,11 +220,12 @@ class TransformRunner:
             if not dry_run:
                 output_path = transform.outputs["output"].path_or_rid
                 label = self._dataset_label(output_path)
-                rows = try_row_count(res)
                 logger.info(
-                    "Writing output: %s (%s)",
+                    "Writing output: %s%s",
                     label,
-                    format_row_count(rows),
+                    format_row_count_suffix(
+                        try_row_count(res, verbose=self.verbose)
+                    ),
                 )
                 started = time.perf_counter()
                 self.sink.save_transaction(df=res, dataset_path_or_rid=output_path)

@@ -4,6 +4,7 @@ from pathlib import Path
 from pyspark.sql import SparkSession
 
 from transforms.runner.data_source.base import BranchNotFoundError, DataSource
+from transforms.runner.data_source.download_result import DownloadResult
 from transforms.runner.dataset_logging import (
     dataset_display_name,
     log_dataset_phase,
@@ -18,6 +19,7 @@ logger = logging.getLogger(__name__)
 class LocalDataSource(DataSource):
     session: SparkSession
     output_dir: str = str((Path.home() / ".fndry_duck" / "local_output"))
+    verbose: bool = False
 
     def resolve_dataset_label(
         self, dataset_path_or_rid: str, branch: str = "master"
@@ -39,8 +41,8 @@ class LocalDataSource(DataSource):
             path=str(local_path),
         ) as phase:
             df = self.session.read.parquet(f"{local_path}/*.parquet")
-            phase["rows"] = try_row_count(df)
-            return df
+            phase["rows"] = try_row_count(df, verbose=self.verbose)
+            return DownloadResult(df=df)
 
     async def download_for_branches(self, dataset_path_or_rid: str, branches: list[str]):
         label = self.resolve_dataset_label(dataset_path_or_rid)

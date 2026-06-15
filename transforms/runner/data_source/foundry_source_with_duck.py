@@ -7,7 +7,7 @@ from typing import TYPE_CHECKING
 
 import duckdb
 
-from ...generate_types import generate_from_spark
+from transforms.runner.data_source.download_result import DownloadMetadata, DownloadResult
 from transforms.runner.dataset_logging import log_dataset_phase
 
 from .foundry_source import FoundrySource
@@ -22,9 +22,7 @@ if TYPE_CHECKING:
 class FoundrySourceWithDuck(FoundrySource):
     duckdb_path: str = str((Path.home() / ".fndry_duck" / "analytical_db.db"))
     duckdb_path_sql: str = str((Path.home() / ".fndry_duck" / "analytical_db.sql"))
-    # get_dataset_dataset_name: Callable[[str], str] = lambda x: x
 
-    
     def get_dataset_name(self, dataset_path_or_rid: str) -> str:
         dataset_path = str(self.ctx.get_dataset(dataset_path_or_rid).path)
         sha_addon = sha256(dataset_path.encode()).hexdigest()[:2]
@@ -32,47 +30,63 @@ class FoundrySourceWithDuck(FoundrySource):
         dataset_name = re.sub("[^a-zA-Z0-9_]", "_", raw_name).lower()
         return f"{dataset_name}_{sha_addon}"
 
-    async def download_dataset(
+    def _download_dataset_sync(
         self, dataset_path_or_rid: str, branch: str
-    ) -> "DataFrame":
-        df = await super().download_dataset(dataset_path_or_rid, branch)
-        label = self.resolve_dataset_label(dataset_path_or_rid, branch)
-        dataset_name = self.get_dataset_name(dataset_path_or_rid)
-        sanitized_branch = re.sub("[^0-9a-zA-Z]+", "_", branch)
+    ) -> DownloadResult:
+        result = super()._download_dataset_sync(dataset_path_or_rid, branch)
+        if result.metadata is not None:
+            result.metadata.dataset_name = self.get_dataset_name(dataset_path_or_rid)
+        return result
 
-        if self.last_path.startswith("query-cache:"):
-            generate_from_spark(dataset_name, df)
-            return df
+    def register_duckdb_views(self, metadata_list: list[DownloadMetadata]) -> None:
+        view_metadata = [m for m in metadata_list if not m.is_query_cache]
+        if not view_metadata:
+            return
 
-        with log_dataset_phase(
-            "duckdb view registration",
-            label,
-            log=logger,
-            branch=branch,
-            view=f"{sanitized_branch}.{dataset_name}",
-        ):
-            self.conn = duckdb.connect(self.duckdb_path)
-            self.conn.execute(f"create schema if not exists {sanitized_branch}")
-            generate_from_spark(dataset_name, df)
+        conn = duckdb.connect(self.duckdb_path)
+        try:
+            for meta in view_metadata:
+                if meta.dataset_name is None:
+                    continue
+                label = self.resolve_dataset_label(
+                    meta.dataset_path_or_rid, meta.branch
+                )
+                sanitized_branch = re.sub("[^0-9a-zA-Z]+", "_", meta.branch)
+                with log_dataset_phase(
+                    "duckdb view registration",
+                    label,
+                    log=logger,
+                    branch=meta.branch,
+                    view=f"{sanitized_branch}.{meta.dataset_name}",
+                ):
+                    conn.execute(f"create schema if not exists {sanitized_branch}")
+                    posix_path = Path(meta.last_path).as_posix()
+                    if meta.last_path.endswith(".parquet"):
+                        conn.execute(
+                            f"CREATE OR REPLACE VIEW {sanitized_branch}.{meta.dataset_name} "
+                            f"as select * from read_parquet('{posix_path}/**/*.parquet')"
+                        )
+                    elif meta.last_path.endswith(".csv"):
+                        conn.execute(
+                            f"CREATE OR REPLACE VIEW {sanitized_branch}.{meta.dataset_name} "
+                            f"as select * from read_csv('{posix_path}/*.csv')"
+                        )
+                    else:
+                        raise NotImplementedError(
+                            f"Format {meta.last_path.split('.')[-1]} is not supported"
+                        )
+            self._dump_duckdb_sql(conn)
+        finally:
+            conn.close()
 
-            if self.last_path.endswith(".parquet"):
-                self.conn.execute(
-                    f"CREATE OR REPLACE VIEW {sanitized_branch}.{dataset_name} as select * from read_parquet('{self.last_path}/**/*.parquet')"
-                )
-            elif self.last_path.endswith(".csv"):
-                self.conn.execute(
-                    f"CREATE OR REPLACE VIEW {sanitized_branch}.{dataset_name} as select * from read_csv('{self.last_path}/*.csv')"
-                )
-            else:
-                raise NotImplementedError(
-                    f"Format {self.last_path.split('.')[-1]} is not supported"
-                )
+    def _dump_duckdb_sql(self, conn: duckdb.DuckDBPyConnection) -> None:
         with open(self.duckdb_path_sql, "w") as f:
-            for row in self.conn.query(
-                f"select schema_name from information_schema.schemata where catalog_name = '{Path(self.duckdb_path).stem}'"
+            for row in conn.query(
+                f"select schema_name from information_schema.schemata "
+                f"where catalog_name = '{Path(self.duckdb_path).stem}'"
             ).fetchall():
                 f.write(f"create schema if not exists {row[0]};\n")
-            for row in self.conn.query(
+            for row in conn.query(
                 "select sql from duckdb_views() where not internal"
             ).fetchall():
                 qry: str = row[0]
@@ -80,11 +94,8 @@ class FoundrySourceWithDuck(FoundrySource):
                     "CREATE VIEW ", "CREATE OR REPLACE VIEW "
                 )
                 f.write(f"{view_replacement};\n")
-        self.conn.close()
-        return df
 
     def download_latest_incremental_transaction(
         self, dataset_path_or_rid: str, branches: list[str], semantic_version: int
     ) -> "DataFrame":
-        # TODO: Implement it
         raise NotImplementedError()

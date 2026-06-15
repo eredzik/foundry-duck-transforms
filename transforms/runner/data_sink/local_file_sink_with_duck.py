@@ -32,6 +32,7 @@ class LocalFileSinkWithDuck(LocalFileSink):
     duckdb_path: str = str((Path.home() / ".fndry_duck" / "analytical_db.db"))
     get_dataset_dataset_name: Callable[[str], str] = sanitize_dataset_name
     resolve_dataset_label: Callable[[str], str] | None = None
+    verbose: bool = False
 
     def _dataset_label(self, dataset_path_or_rid: str) -> str:
         if self.resolve_dataset_label is not None:
@@ -47,13 +48,13 @@ class LocalFileSinkWithDuck(LocalFileSink):
         dataset_path_or_rid: str,
     ) -> None:
         label = self._dataset_label(dataset_path_or_rid)
-        rows = try_row_count(df)
+        rows = try_row_count(df, verbose=self.verbose)
         with log_dataset_phase(
             "local write",
             label,
             log=logger,
             branch=self.branch,
-            rows=rows if rows is not None else "unknown",
+            rows=rows if rows is not None else None,
         ) as phase:
             result_path = Path(self.output_dir) / self.branch / dataset_path_or_rid
             result_path.mkdir(parents=True, exist_ok=True)
@@ -75,10 +76,10 @@ class LocalFileSinkWithDuck(LocalFileSink):
         dataset_dir = Path(self.output_dir) / self.branch / dataset_path_or_rid
         data_parquet = dataset_dir / "data.parquet"
         if data_parquet.is_file():
-            return str(data_parquet)
+            return data_parquet.as_posix()
         if data_parquet.is_dir():
-            return f"{data_parquet}/**/*.parquet"
-        return f"{dataset_dir}/**/*.parquet"
+            return f"{data_parquet.as_posix()}/**/*.parquet"
+        return f"{dataset_dir.as_posix()}/**/*.parquet"
 
     def save_incremental_transaction(
         self,

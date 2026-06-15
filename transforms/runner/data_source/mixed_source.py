@@ -1,6 +1,7 @@
 from dataclasses import dataclass
 
 from transforms.runner.data_source.base import BranchNotFoundError, DataSource
+from transforms.runner.data_source.download_result import DownloadMetadata
 from transforms.runner.dataset_logging import dataset_display_name
 import logging
 
@@ -48,3 +49,9 @@ class MixedDataSource(DataSource):
                     label,
                 )
         raise BranchNotFoundError(source="MIXED")
+
+    def register_duckdb_views(self, metadata_list: list[DownloadMetadata]) -> None:
+        if self.fallback_source is not None and hasattr(
+            self.fallback_source, "register_duckdb_views"
+        ):
+            self.fallback_source.register_duckdb_views(metadata_list)

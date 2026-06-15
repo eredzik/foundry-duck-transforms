@@ -64,8 +64,10 @@ async def test_foundry_source_with_duck_downloads_real_dataset(tmp_path: Path) -
         duckdb_path_sql=str(duckdb_sql_path),
     )
 
-    df = await source.download_dataset(FOUNDRY_E2E_DATASET, branch=FOUNDRY_E2E_BRANCH)
-    
+    result = await source.download_dataset(FOUNDRY_E2E_DATASET, branch=FOUNDRY_E2E_BRANCH)
+    assert result.metadata is not None
+    source.register_duckdb_views([result.metadata])
+    df = result.df
 
     # The returned object should be a SQLFrame DataFrame (Spark-like API)
     assert hasattr(df, "limit")

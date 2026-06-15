@@ -150,7 +150,7 @@ class FoundryManager:
             self.duckdb_conn.execute(
                 f"CREATE SCHEMA IF NOT EXISTS {sanitized_branch_name}"
             )
-            temp_dataset_spark = Path(temp_output) / "spark/*"
+            temp_dataset_spark = (Path(temp_output) / "spark/*").as_posix()
             create_table_query = f"CREATE TABLE IF NOT EXISTS {sanitized_branch_name}.{sanitized_rid} AS SELECT * FROM read_parquet('{temp_dataset_spark}')"
             self.duckdb_conn.execute(create_table_query)
 

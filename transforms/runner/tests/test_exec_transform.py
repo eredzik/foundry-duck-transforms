@@ -5,6 +5,7 @@ from pyspark.sql import DataFrame, SparkSession, Row
 from transforms.api.transform_df import Transform, TransformOutput, Input, Output
 from transforms.runner.data_sink.base import DataSink
 from transforms.runner.data_source.base import DataSource
+from transforms.runner.data_source.download_result import DownloadResult
 from transforms.runner.exec_transform import TransformRunner
 from transforms.engine.duckdb import init_sess
 
@@ -12,11 +13,11 @@ class MockDataSource(DataSource):
     def __init__(self, data_dict: Dict[str, DataFrame]):
         self.data = data_dict
     
-    async def download_for_branches(self, dataset_path_or_rid: str, branches: List[str]) -> DataFrame:
+    async def download_for_branches(self, dataset_path_or_rid: str, branches: List[str]) -> DownloadResult:
         df = self.data.get(dataset_path_or_rid)
         if df is None:
             raise ValueError(f"Dataset {dataset_path_or_rid} not found")
-        return df
+        return DownloadResult(df=df)
     
     async def download_latest_incremental_transaction(self, dataset_path_or_rid: str, branches: List[str], semantic_version: int) -> DataFrame:
         df = self.data.get(f"{dataset_path_or_rid}_incremental")

@@ -3,6 +3,8 @@ from dataclasses import dataclass
 
 from pyspark.sql import DataFrame
 
+from .download_result import DownloadResult
+
 
 @dataclass
 class DataSource(ABC):
@@ -10,12 +12,12 @@ class DataSource(ABC):
         self,
         dataset_path_or_rid: str,
         branch: str,
-    ) -> DataFrame:
+    ) -> DownloadResult:
         raise NotImplementedError()
 
     async def download_for_branches(
         self, dataset_path_or_rid: str, branches: list[str]
-    ) -> DataFrame:
+    ) -> DownloadResult:
         raise NotImplementedError()
 
     def get_last_transaction(

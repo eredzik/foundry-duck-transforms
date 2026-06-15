@@ -69,6 +69,9 @@ if __name__ == "__main__":
         dry_run: Annotated[
             bool, typer.Option(help="Dry run the transformation")
         ] = False,
+        verbose: Annotated[
+            bool, typer.Option(help="Enable verbose logging including row counts")
+        ] = False,
         local_dev_branch_name: Annotated[
             str, typer.Option(help="Branch name for local development")
         ] = "duck-fndry-dev",
@@ -98,6 +101,7 @@ if __name__ == "__main__":
                 local_dev_branch_name=local_dev_branch_name,
                 omit_checks=omit_checks,
                 transform_to_run=transform_to_run,
+                verbose=verbose,
             )
 
     typer.run(main)
