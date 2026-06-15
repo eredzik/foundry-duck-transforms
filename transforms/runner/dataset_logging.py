@@ -5,6 +5,8 @@ import time
 from contextlib import contextmanager
 from typing import Any, Iterator
 
+from transforms.runner.progress import get_current_task_id, get_progress, is_progress_active
+
 logger = logging.getLogger(__name__)
 
 
@@ -44,6 +46,13 @@ def log_verbose_step(
     log: logging.Logger = logger,
     **details: Any,
 ) -> Iterator[None]:
+    progress = get_progress()
+    task_id = get_current_task_id()
+    if is_progress_active() and verbose and progress is not None and task_id is not None:
+        progress.update_task(task_id, phase=step, **details)
+        yield
+        return
+
     if not verbose:
         yield
         return
@@ -65,16 +74,41 @@ def log_dataset_phase(
     log: logging.Logger = logger,
     **start_details: Any,
 ) -> Iterator[dict[str, Any]]:
-    start_msg = f"Started {operation}: {label}"
-    if formatted := _format_details(start_details):
-        start_msg = f"{start_msg} ({formatted})"
-    log.info(start_msg)
+    progress = get_progress()
+    task_id = get_current_task_id()
+    use_progress = is_progress_active() and progress is not None and task_id is not None
+
+    if not use_progress:
+        start_msg = f"Started {operation}: {label}"
+        if formatted := _format_details(start_details):
+            start_msg = f"{start_msg} ({formatted})"
+        log.info(start_msg)
+    else:
+        assert progress is not None and task_id is not None
+        progress.update_task(task_id, phase=operation, **start_details)
 
     started = time.perf_counter()
     context: dict[str, Any] = {}
+    failed = False
     try:
         yield context
+    except Exception as exc:
+        failed = True
+        if use_progress:
+            assert progress is not None and task_id is not None
+            progress.fail_task(task_id, error=str(exc))
+        raise
     finally:
-        elapsed = time.perf_counter() - started
-        end_details = {**start_details, **context, "elapsed": format_elapsed(elapsed)}
-        log.info(f"Finished {operation}: {label} ({_format_details(end_details)})")
+        if use_progress and not failed:
+            assert progress is not None and task_id is not None
+            elapsed = format_elapsed(time.perf_counter() - started)
+            end_details = {**start_details, **context}
+            progress.update_task(
+                task_id,
+                phase=f"{operation} ({elapsed})",
+                **end_details,
+            )
+        elif not use_progress and not failed:
+            elapsed = time.perf_counter() - started
+            end_details = {**start_details, **context, "elapsed": format_elapsed(elapsed)}
+            log.info(f"Finished {operation}: {label} ({_format_details(end_details)})")

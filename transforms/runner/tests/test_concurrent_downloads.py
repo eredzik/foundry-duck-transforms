@@ -134,6 +134,34 @@ async def test_parallel_downloads_preserve_metadata() -> None:
     }
 
 
+def test_get_dataset_name_is_cached() -> None:
+    ctx = MagicMock()
+    dataset = MagicMock()
+    dataset.path = "/path/to/My Dataset"
+    ctx.get_dataset.return_value = dataset
+
+    source = FoundrySourceWithDuck(ctx=ctx, session=MagicMock())
+
+    first = source.get_dataset_name("ri.foundry.main.dataset.abc")
+    second = source.get_dataset_name("ri.foundry.main.dataset.abc")
+
+    assert first == second == "my_dataset_f7"
+    ctx.get_dataset.assert_called_once_with("ri.foundry.main.dataset.abc")
+
+
+def test_get_dataset_name_uses_provided_dataset_path() -> None:
+    ctx = MagicMock()
+    source = FoundrySourceWithDuck(ctx=ctx, session=MagicMock())
+
+    name = source.get_dataset_name(
+        "ri.foundry.main.dataset.abc",
+        dataset_path="/path/to/My Dataset",
+    )
+
+    assert name == "my_dataset_f7"
+    ctx.get_dataset.assert_not_called()
+
+
 def test_register_duckdb_views_batch(tmp_path: Path) -> None:
     import duckdb
 

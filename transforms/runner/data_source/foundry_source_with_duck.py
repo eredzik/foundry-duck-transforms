@@ -1,7 +1,7 @@
 from hashlib import sha256
 import logging
 import re
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
 from typing import TYPE_CHECKING
 
@@ -22,26 +22,45 @@ if TYPE_CHECKING:
 class FoundrySourceWithDuck(FoundrySource):
     duckdb_path: str = str((Path.home() / ".fndry_duck" / "analytical_db.db"))
     duckdb_path_sql: str = str((Path.home() / ".fndry_duck" / "analytical_db.sql"))
+    _dataset_name_cache: dict[str, str] = field(default_factory=dict, repr=False)
 
-    def get_dataset_name(self, dataset_path_or_rid: str) -> str:
-        dataset_path = str(self.ctx.get_dataset(dataset_path_or_rid).path)
+    def get_dataset_name(
+        self, dataset_path_or_rid: str, *, dataset_path: str | None = None
+    ) -> str:
+        cached = self._dataset_name_cache.get(dataset_path_or_rid)
+        if cached is not None:
+            return cached
+
+        if dataset_path is None:
+            dataset_path = str(self.ctx.get_dataset(dataset_path_or_rid).path)
+
         sha_addon = sha256(dataset_path.encode()).hexdigest()[:2]
         raw_name = dataset_path.split("/")[-1]
         dataset_name = re.sub("[^a-zA-Z0-9_]", "_", raw_name).lower()
-        return f"{dataset_name}_{sha_addon}"
+        name = f"{dataset_name}_{sha_addon}"
+        self._dataset_name_cache[dataset_path_or_rid] = name
+        return name
 
     def _download_dataset_sync(
         self, dataset_path_or_rid: str, branch: str
     ) -> DownloadResult:
         result = super()._download_dataset_sync(dataset_path_or_rid, branch)
         if result.metadata is not None:
+            cached_identity = self._get_cached_identity_if_on_disk(dataset_path_or_rid)
             with log_verbose_step(
                 "dataset name",
                 verbose=self.verbose,
                 log=logger,
                 dataset=dataset_path_or_rid,
             ):
-                result.metadata.dataset_name = self.get_dataset_name(dataset_path_or_rid)
+                result.metadata.dataset_name = self.get_dataset_name(
+                    dataset_path_or_rid,
+                    dataset_path=(
+                        cached_identity.get("dataset_path")
+                        if cached_identity is not None
+                        else None
+                    ),
+                )
         return result
 
     def register_duckdb_views(self, metadata_list: list[DownloadMetadata]) -> None:

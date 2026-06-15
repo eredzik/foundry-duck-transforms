@@ -11,6 +11,7 @@ from transforms.config import get_settings
 from transforms.api.transform_df import Transform
 from transforms.runner.dataset_logging import log_verbose_step
 from transforms.runner.exec_transform import TransformRunner
+from transforms.runner.progress import get_progress
 
 from .data_sink.local_file_sink_with_duck import LocalFileSinkWithDuck
 from .data_source.base import DataSource
@@ -31,6 +32,10 @@ def execute_with_default_foundry(
     transform_name: str | None = None,
     verbose: bool = False,
 ):
+    progress = get_progress()
+
+    if progress is not None:
+        progress.start_phase("import", "Import transform")
     with log_verbose_step(
         "import transform",
         verbose=verbose,
@@ -38,6 +43,9 @@ def execute_with_default_foundry(
         path=transform_to_run,
     ):
         mod = import_from_path("transform", transform_to_run)
+    if progress is not None:
+        progress.complete_phase("import")
+
     transforms: dict[str, Transform | Any] = {}
     for name, item in mod.__dict__.items():
         if isinstance(item, Transform):
@@ -65,12 +73,17 @@ def execute_with_default_foundry(
     branches = fallback_branches.split(",")
     all_branches = [local_dev_branch_name] + branches
 
-
     settings = get_settings()
 
+    if progress is not None:
+        progress.start_phase("context", "FoundryContext")
     with log_verbose_step("FoundryContext", verbose=verbose, log=logger):
         foundry_ctx = FoundryContext()
+    if progress is not None:
+        progress.complete_phase("context")
 
+    if progress is not None:
+        progress.start_phase("setup", "Setup runner")
     with log_verbose_step("setup runner", verbose=verbose, log=logger):
         foundry_source = FoundrySourceWithDuck(
             ctx=foundry_ctx,
@@ -95,6 +108,8 @@ def execute_with_default_foundry(
             fallback_branches=all_branches,
             verbose=verbose,
         )
+    if progress is not None:
+        progress.complete_phase("setup")
 
     runner.exec_transform(
         selected_transform,

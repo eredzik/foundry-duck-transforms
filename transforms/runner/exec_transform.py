@@ -16,6 +16,7 @@ from transforms.runner.dataset_logging import (
     format_elapsed,
     log_verbose_step,
 )
+from transforms.runner.progress import get_progress
 
 from .exec_check import execute_check
 import logging
@@ -47,6 +48,10 @@ class TransformRunner:
         dataset_path_or_rid: str,
         branches: list[str],
     ) -> DownloadResult:
+        progress = get_progress()
+        task_id = None
+        task_token = None
+
         with log_verbose_step(
             "resolve label",
             verbose=self.verbose,
@@ -55,23 +60,46 @@ class TransformRunner:
             dataset=dataset_path_or_rid,
         ):
             label = self._dataset_label(dataset_path_or_rid, branches[-1])
-        logger.info(
-            "Loading input '%s': %s (branches: %s)",
-            argname,
-            label,
-            ", ".join(branches),
-        )
-        started = time.perf_counter()
-        result = await self.sourcer.download_for_branches(dataset_path_or_rid, branches)
-        logger.info(
-            "Loaded input '%s': %s in %s",
-            argname,
-            label,
-            format_elapsed(time.perf_counter() - started),
-        )
-        return result
+
+        if progress is not None:
+            task_id = progress.start_input_task(argname, label)
+            task_token = progress.set_current_task(task_id)
+            progress.update_task(task_id, phase="loading", detail=", ".join(branches))
+
+        try:
+            if progress is None:
+                logger.info(
+                    "Loading input '%s': %s (branches: %s)",
+                    argname,
+                    label,
+                    ", ".join(branches),
+                )
+            started = time.perf_counter()
+            result = await self.sourcer.download_for_branches(dataset_path_or_rid, branches)
+            if progress is not None and task_id is not None:
+                progress.complete_task(
+                    task_id,
+                    phase=f"loaded {format_elapsed(time.perf_counter() - started)}",
+                    branch=result.metadata.branch if result.metadata else branches[-1],
+                )
+            elif progress is None:
+                logger.info(
+                    "Loaded input '%s': %s in %s",
+                    argname,
+                    label,
+                    format_elapsed(time.perf_counter() - started),
+                )
+            return result
+        except Exception as exc:
+            if progress is not None and task_id is not None:
+                progress.fail_task(task_id, error=str(exc))
+            raise
+        finally:
+            if progress is not None and task_token is not None:
+                progress.reset_current_task(task_token)
 
     def _post_process_downloads(self, results: list[DownloadResult]) -> None:
+        progress = get_progress()
         metadata_list: list[DownloadMetadata] = [
             r.metadata for r in results if r.metadata is not None
         ]
@@ -81,6 +109,8 @@ class TransformRunner:
             if r.metadata is not None and r.metadata.dataset_name is not None
         ]
         if type_entries:
+            if progress is not None:
+                progress.start_phase("types", "Generate types")
             with log_verbose_step(
                 "generate types",
                 verbose=self.verbose,
@@ -88,7 +118,11 @@ class TransformRunner:
                 datasets=len(type_entries),
             ):
                 generate_from_spark_batch(type_entries)
+            if progress is not None:
+                progress.complete_phase("types")
         if metadata_list and hasattr(self.sourcer, "register_duckdb_views"):
+            if progress is not None:
+                progress.start_phase("duckdb", "DuckDB views")
             with log_verbose_step(
                 "duckdb views",
                 verbose=self.verbose,
@@ -96,6 +130,8 @@ class TransformRunner:
                 datasets=len(metadata_list),
             ):
                 self.sourcer.register_duckdb_views(metadata_list)
+            if progress is not None:
+                progress.complete_phase("duckdb")
 
     async def download_datasets(self, transform: Transform, omit_checks: bool, dry_run: bool) -> Dict[str, Union[DataFrame, TransformOutput]]:
         sources: Dict[str, Union[DataFrame, TransformOutput]] = {}
@@ -199,19 +235,31 @@ class TransformRunner:
         
         if transform.outputs:
             for argname, output in transform.outputs.items():
-                logger.info(
-                    "Prepared output '%s': %s",
-                    argname,
-                    self._dataset_label(output.path_or_rid),
-                )
+                if get_progress() is None:
+                    logger.info(
+                        "Prepared output '%s': %s",
+                        argname,
+                        self._dataset_label(output.path_or_rid),
+                    )
 
         transform_fn = transform.transform
         while hasattr(transform_fn, "__wrapped__"):
             transform_fn = transform_fn.__wrapped__
         transform_name = getattr(transform_fn, "__name__", "transform")
+
+        progress = get_progress()
+        if progress is not None:
+            progress.start_phase("transform", f"Transform {transform_name}")
+        elif not transform.outputs:
+            pass
         logger.info("Starting transform '%s'", transform_name)
         transform_started = time.perf_counter()
         res = transform.transform(**sources)
+        if progress is not None:
+            progress.complete_phase(
+                "transform",
+                elapsed=format_elapsed(time.perf_counter() - transform_started),
+            )
         logger.info(
             "Finished transform '%s' in %s",
             transform_name,
@@ -230,17 +278,27 @@ class TransformRunner:
             if not dry_run:
                 output_path = transform.outputs["output"].path_or_rid
                 label = self._dataset_label(output_path)
-                logger.info(
-                    "Writing output: %s",
-                    label,
-                )
+                progress = get_progress()
+                if progress is not None:
+                    progress.start_phase("write", f"Write {label}")
+                if progress is None:
+                    logger.info(
+                        "Writing output: %s",
+                        label,
+                    )
                 started = time.perf_counter()
                 self.sink.save_transaction(df=res, dataset_path_or_rid=output_path)
-                logger.info(
-                    "Finished writing output: %s in %s",
-                    label,
-                    format_elapsed(time.perf_counter() - started),
-                )
+                if progress is not None:
+                    progress.complete_phase(
+                        "write",
+                        elapsed=format_elapsed(time.perf_counter() - started),
+                    )
+                elif progress is None:
+                    logger.info(
+                        "Finished writing output: %s in %s",
+                        label,
+                        format_elapsed(time.perf_counter() - started),
+                    )
             else:
                 res.limit(1).collect()
         else:

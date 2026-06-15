@@ -445,7 +445,7 @@ wheels = [
 
 [[package]]
 name = "foundry-duck-transforms"
-version = "0.1.15"
+version = "0.1.18"
 source = { editable = "." }
 dependencies = [
     { name = "asyncer" },
@@ -454,6 +454,7 @@ dependencies = [
     { name = "pandas" },
     { name = "pyarrow" },
     { name = "pyspark" },
+    { name = "rich" },
     { name = "sqlframe" },
     { name = "typer" },
 ]
@@ -479,6 +480,7 @@ requires-dist = [
     { name = "pandas" },
     { name = "pyarrow" },
     { name = "pyspark" },
+    { name = "rich" },
     { name = "sqlframe" },
     { name = "typer" },
 ]

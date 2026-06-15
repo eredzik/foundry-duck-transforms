@@ -37,12 +37,26 @@ Available options:
 - `--omit-checks`: Disables checks running
 - `--sail-server-url TEXT`: Sail server url (required when using spark-sail engine)
 - `--dry-run`: Dry run the transformation without writing results
+- `--verbose`: Enable verbose timing diagnostics for startup and dataset loading
+- `--ui [plain|progress]`: Output mode — plain logs (default) or Rich progress bars showing per-dataset startup status
 - `--local-dev-branch-name TEXT`: Branch name for local development (default: "duck-fndry-dev")
 
 Example with options:
 
 ```bash
 python -m transforms.run my_transform.py dev,master --engine duckdb --dry-run
+```
+
+For multi-input transforms, use progress mode to see which datasets are still loading:
+
+```bash
+python -m transforms.run my_transform.py dev,master --ui progress
+```
+
+Combine with `--verbose` to show sub-phase detail (identity resolution, file fetch, parquet read) in each progress bar:
+
+```bash
+python -m transforms.run my_transform.py dev,master --ui progress --verbose
 ```
 
 ## Development Setup
