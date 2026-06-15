@@ -6,6 +6,7 @@ from typing import Any
 from foundry_dev_tools import FoundryContext
 from pyspark.sql import SparkSession
 
+from transforms.config import get_settings
 from transforms.api.transform_df import Transform
 from transforms.runner.exec_transform import TransformRunner
 
@@ -54,8 +55,12 @@ def execute_with_default_foundry(
     all_branches = [local_dev_branch_name] + branches
 
 
+    settings = get_settings()
+
     foundry_source = FoundrySourceWithDuck(
-        ctx=FoundryContext(), session=session, 
+        ctx=FoundryContext(),
+        session=session,
+        settings=settings,
     )
     local_source = LocalDataSource(session=session)
     sources_mapping: dict[str, DataSource] = {b: foundry_source for b in branches}

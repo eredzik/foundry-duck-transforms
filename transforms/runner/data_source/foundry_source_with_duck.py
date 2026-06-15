@@ -40,6 +40,10 @@ class FoundrySourceWithDuck(FoundrySource):
         dataset_name = self.get_dataset_name(dataset_path_or_rid)
         sanitized_branch = re.sub("[^0-9a-zA-Z]+", "_", branch)
 
+        if self.last_path.startswith("query-cache:"):
+            generate_from_spark(dataset_name, df)
+            return df
+
         with log_dataset_phase(
             "duckdb view registration",
             label,

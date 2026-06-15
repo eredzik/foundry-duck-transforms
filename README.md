@@ -66,6 +66,32 @@ pip install -e ".[dev]"
 
 See [here](https://emdgroup.github.io/foundry-dev-tools/configuration.html) for detailed configuration instructions.
 
+### Duck Transforms Settings
+
+Create `config_foundry_duck_transforms.toml` in the same locations as foundry-dev-tools config:
+
+- `~/.foundry-dev-tools/config_foundry_duck_transforms.toml`
+- `~/.config/foundry-dev-tools/config_foundry_duck_transforms.toml`
+- `{project_root}/config_foundry_duck_transforms.toml`
+
+Example:
+
+```toml
+[config]
+allowed_stale_time = "7d"
+
+[datasets."ri.foundry.main.dataset.33dd1b10-cbcb-4035-94a4-a5e9d26699ce"]
+allowed_stale_time = "30d"
+source_query = "SELECT col_a, col_b FROM `{dataset_rid}` WHERE event_date >= '2025-01-01'"
+```
+
+Options:
+
+- `allowed_stale_time` — keep using the on-disk Foundry cache even when a newer transaction exists, as long as the cached transaction `closeTime` is within this TTL (`90m`, `24h`, `7d`, etc.). Omit for always-fresh downloads.
+- `source_query` — Foundry SQL used instead of a full file download. Placeholders: `{dataset_rid}`, `{dataset_path}`, `{branch}`. Query results are cached locally under the foundry-dev-tools cache directory; cache TTL uses the same `allowed_stale_time`.
+
+Per-dataset `[datasets."..."]` tables override global `[config]` defaults. Dataset keys can be a dataset RID or Foundry compass path.
+
 ### VSCode Setup
 
 Add this to your `.vscode/launch.json` for debugging support:
