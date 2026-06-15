@@ -37,6 +37,7 @@ Available options:
 - `--omit-checks`: Disables checks running
 - `--sail-server-url TEXT`: Sail server url (required when using spark-sail engine)
 - `--dry-run`: Dry run the transformation without writing results
+- `--explain`: Print DuckDB SQL and EXPLAIN plan instead of executing the transform (requires `--engine duckdb`)
 - `--verbose`: Enable verbose timing diagnostics for startup and dataset loading
 - `--ui [plain|progress]`: Output mode — plain logs (default) or Rich progress bars showing per-dataset startup status
 - `--local-dev-branch-name TEXT`: Branch name for local development (default: "duck-fndry-dev")
@@ -45,6 +46,12 @@ Example with options:
 
 ```bash
 python -m transforms.run my_transform.py dev,master --engine duckdb --dry-run
+```
+
+To inspect the DuckDB query plan without writing output or materializing data:
+
+```bash
+python -m transforms.run my_transform.py dev,master --engine duckdb --explain
 ```
 
 For multi-input transforms, use progress mode to see which datasets are still loading:

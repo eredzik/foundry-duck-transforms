@@ -19,6 +19,7 @@ from transforms.runner.dataset_logging import (
 from transforms.runner.progress import get_progress
 
 from .exec_check import execute_check
+from .execution_plan import format_execution_plan
 import logging
 logger = logging.getLogger(__name__)
 
@@ -164,7 +165,14 @@ class TransformRunner:
             self._post_process_downloads([result])
         return result.df
             
-    def exec_transform(self, transform: Transform, omit_checks: bool, dry_run: bool, sources: Optional[Dict[str, Union[DataFrame, TransformOutput]]] = None) -> None:
+    def exec_transform(
+        self,
+        transform: Transform,
+        omit_checks: bool,
+        dry_run: bool,
+        sources: Optional[Dict[str, Union[DataFrame, TransformOutput]]] = None,
+        explain_only: bool = False,
+    ) -> None:
         if sources is None:
             sources = syncify(self.download_datasets, raise_sync_error=False)(transform, omit_checks, dry_run)
             
@@ -192,34 +200,36 @@ class TransformRunner:
                     def on_dataframe_write(df: DataFrame, mode: Literal["append", "replace"]) -> None:
                         if mode == "append":
                             raise NotImplementedError()
+                        if explain_only:
+                            print(format_execution_plan(df, label=output_argname))
+                            return
+                        if not omit_checks:
+                            for check in output_checks:
+                                execute_check(df, check)
+                        if (transform.incremental_opts is not None) and (not dry_run):
+                            self.sink.save_incremental_transaction(
+                                df,
+                                output_path,
+                                transform.incremental_opts.semantic_version
+                            )
                         else:
-                            if not omit_checks:
-                                for check in output_checks:
-                                    execute_check(df, check)
-                            if (transform.incremental_opts is not None) and (not dry_run):
-                                self.sink.save_incremental_transaction(
-                                    df,
-                                    output_path,
-                                    transform.incremental_opts.semantic_version
-                                )
-                            else:
-                                label = self._dataset_label(output_path)
-                                logger.info(
-                                    "Writing output '%s': %s",
-                                    output_argname,
-                                    label,
-                                )
-                                started = time.perf_counter()
-                                self.sink.save_transaction(
-                                    df=df,
-                                    dataset_path_or_rid=output_path,
-                                )
-                                logger.info(
-                                    "Finished writing output '%s': %s in %s",
-                                    output_argname,
-                                    label,
-                                    format_elapsed(time.perf_counter() - started),
-                                )
+                            label = self._dataset_label(output_path)
+                            logger.info(
+                                "Writing output '%s': %s",
+                                output_argname,
+                                label,
+                            )
+                            started = time.perf_counter()
+                            self.sink.save_transaction(
+                                df=df,
+                                dataset_path_or_rid=output_path,
+                            )
+                            logger.info(
+                                "Finished writing output '%s': %s in %s",
+                                output_argname,
+                                label,
+                                format_elapsed(time.perf_counter() - started),
+                            )
                     return on_dataframe_write
 
                 output_df_impl = TransformOutput(
@@ -269,7 +279,11 @@ class TransformRunner:
         if transform.multi_outputs is None:
             if not hasattr(res, "limit") or not hasattr(res, "collect"):
                 raise ValueError("Transform without multi_outputs must return a DataFrame-like object")
-            
+
+            if explain_only:
+                print(format_execution_plan(res))
+                return
+
             if not omit_checks:
                 for check in transform.outputs["output"].checks:
                     logger.info(f"Running check {check.description}")
@@ -302,9 +316,11 @@ class TransformRunner:
             else:
                 res.limit(1).collect()
         else:
+            if explain_only:
+                logger.info("Finished transform successfully (explain only)")
+                return
             if transform.incremental_opts is not None:
                 logger.info("Finished transform successfully")
                 raise NotImplementedError("Not yet implemented saving for incremental dataset")
             else:
                 logger.info("Finished transform successfully")
-                

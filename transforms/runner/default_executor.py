@@ -31,6 +31,7 @@ def execute_with_default_foundry(
     local_dev_branch_name: str,
     transform_name: str | None = None,
     verbose: bool = False,
+    explain_only: bool = False,
 ):
     progress = get_progress()
 
@@ -115,6 +116,7 @@ def execute_with_default_foundry(
         selected_transform,
         omit_checks=omit_checks,
         dry_run=dry_run,
+        explain_only=explain_only,
     )
 
 

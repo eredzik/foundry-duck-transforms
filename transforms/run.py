@@ -72,6 +72,12 @@ if __name__ == "__main__":
         dry_run: Annotated[
             bool, typer.Option(help="Dry run the transformation")
         ] = False,
+        explain: Annotated[
+            bool,
+            typer.Option(
+                help="Print DuckDB SQL and EXPLAIN plan instead of executing the transform"
+            ),
+        ] = False,
         verbose: Annotated[
             bool,
             typer.Option(
@@ -86,6 +92,11 @@ if __name__ == "__main__":
             str, typer.Option(help="Branch name for local development")
         ] = "duck-fndry-dev",
     ):
+        if explain and dry_run:
+            raise typer.BadParameter("--explain and --dry-run are mutually exclusive")
+        if explain and engine != Engine.duckdb:
+            raise typer.BadParameter("--explain requires --engine duckdb")
+
         with progress_context(ui):
             with traverse_to_setup_and_add_to_path(transform_to_run):
                 progress = get_progress()
@@ -112,6 +123,7 @@ if __name__ == "__main__":
 
                 execute_with_default_foundry(
                     dry_run=dry_run,
+                    explain_only=explain,
                     fallback_branches=fallback_branches,
                     transform_name=transform_name,
                     session=session,

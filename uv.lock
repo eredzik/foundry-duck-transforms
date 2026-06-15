@@ -445,7 +445,7 @@ wheels = [
 
 [[package]]
 name = "foundry-duck-transforms"
-version = "0.1.18"
+version = "0.1.19"
 source = { editable = "." }
 dependencies = [
     { name = "asyncer" },
