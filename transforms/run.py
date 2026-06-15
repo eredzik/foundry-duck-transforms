@@ -1,3 +1,4 @@
+import logging
 import sys
 from contextlib import contextmanager
 from enum import Enum
@@ -6,7 +7,8 @@ from typing import Optional
 
 import typer
 from typing_extensions import Annotated
-import logging
+
+from transforms.runner.dataset_logging import log_verbose_step
 
 logging.basicConfig(
     level=logging.INFO,
@@ -70,7 +72,10 @@ if __name__ == "__main__":
             bool, typer.Option(help="Dry run the transformation")
         ] = False,
         verbose: Annotated[
-            bool, typer.Option(help="Enable verbose logging including row counts")
+            bool,
+            typer.Option(
+                help="Enable verbose timing diagnostics for startup and dataset loading"
+            ),
         ] = False,
         local_dev_branch_name: Annotated[
             str, typer.Option(help="Branch name for local development")
@@ -78,18 +83,19 @@ if __name__ == "__main__":
     ):
         with traverse_to_setup_and_add_to_path(transform_to_run):
             logger.info(f"Starting engine {engine}")
-            if engine == engine.duckdb:
-                from transforms.engine.duckdb import init_sess
+            with log_verbose_step("engine init", verbose=verbose, log=logger, engine=engine.value):
+                if engine == engine.duckdb:
+                    from transforms.engine.duckdb import init_sess
 
-                session = init_sess()
-            if engine == Engine.sparksail:
-                from transforms.engine.spark_sail import init_sess
+                    session = init_sess()
+                elif engine == Engine.sparksail:
+                    from transforms.engine.spark_sail import init_sess
 
-                session = init_sess(sail_server_url)
-            else:
-                from transforms.engine.spark import init_sess
+                    session = init_sess(sail_server_url)
+                else:
+                    from transforms.engine.spark import init_sess
 
-                session = init_sess()
+                    session = init_sess()
             logger.info(f"Started engine {engine}")
             from .runner.default_executor import execute_with_default_foundry
 

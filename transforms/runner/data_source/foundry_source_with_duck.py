@@ -8,7 +8,7 @@ from typing import TYPE_CHECKING
 import duckdb
 
 from transforms.runner.data_source.download_result import DownloadMetadata, DownloadResult
-from transforms.runner.dataset_logging import log_dataset_phase
+from transforms.runner.dataset_logging import log_dataset_phase, log_verbose_step
 
 from .foundry_source import FoundrySource
 
@@ -35,7 +35,13 @@ class FoundrySourceWithDuck(FoundrySource):
     ) -> DownloadResult:
         result = super()._download_dataset_sync(dataset_path_or_rid, branch)
         if result.metadata is not None:
-            result.metadata.dataset_name = self.get_dataset_name(dataset_path_or_rid)
+            with log_verbose_step(
+                "dataset name",
+                verbose=self.verbose,
+                log=logger,
+                dataset=dataset_path_or_rid,
+            ):
+                result.metadata.dataset_name = self.get_dataset_name(dataset_path_or_rid)
         return result
 
     def register_duckdb_views(self, metadata_list: list[DownloadMetadata]) -> None:

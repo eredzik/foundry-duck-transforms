@@ -1,4 +1,5 @@
 import importlib.util
+import logging
 import sys
 
 from typing import Any
@@ -8,6 +9,7 @@ from pyspark.sql import SparkSession
 
 from transforms.config import get_settings
 from transforms.api.transform_df import Transform
+from transforms.runner.dataset_logging import log_verbose_step
 from transforms.runner.exec_transform import TransformRunner
 
 from .data_sink.local_file_sink_with_duck import LocalFileSinkWithDuck
@@ -15,6 +17,8 @@ from .data_source.base import DataSource
 from .data_source.foundry_source_with_duck import FoundrySourceWithDuck
 from .data_source.local_file_source import LocalDataSource
 from .data_source.mixed_source import MixedDataSource
+
+logger = logging.getLogger(__name__)
 
 
 def execute_with_default_foundry(
@@ -27,7 +31,13 @@ def execute_with_default_foundry(
     transform_name: str | None = None,
     verbose: bool = False,
 ):
-    mod = import_from_path("transform", transform_to_run)
+    with log_verbose_step(
+        "import transform",
+        verbose=verbose,
+        log=logger,
+        path=transform_to_run,
+    ):
+        mod = import_from_path("transform", transform_to_run)
     transforms: dict[str, Transform | Any] = {}
     for name, item in mod.__dict__.items():
         if isinstance(item, Transform):
@@ -58,29 +68,35 @@ def execute_with_default_foundry(
 
     settings = get_settings()
 
-    foundry_source = FoundrySourceWithDuck(
-        ctx=FoundryContext(),
-        session=session,
-        settings=settings,
-        verbose=verbose,
-    )
-    local_source = LocalDataSource(session=session, verbose=verbose)
-    sources_mapping: dict[str, DataSource] = {b: foundry_source for b in branches}
-    sources_mapping[local_dev_branch_name] = local_source
+    with log_verbose_step("FoundryContext", verbose=verbose, log=logger):
+        foundry_ctx = FoundryContext()
 
-    TransformRunner(
-        sink=LocalFileSinkWithDuck(
-            branch=local_dev_branch_name,
-            resolve_dataset_label=foundry_source.resolve_dataset_label,
+    with log_verbose_step("setup runner", verbose=verbose, log=logger):
+        foundry_source = FoundrySourceWithDuck(
+            ctx=foundry_ctx,
+            session=session,
+            settings=settings,
             verbose=verbose,
-        ),
-        sourcer=MixedDataSource(
-            sources=sources_mapping,
-            fallback_source=foundry_source,
-        ),
-        fallback_branches=all_branches,
-        verbose=verbose,
-    ).exec_transform(
+        )
+        local_source = LocalDataSource(session=session, verbose=verbose)
+        sources_mapping: dict[str, DataSource] = {b: foundry_source for b in branches}
+        sources_mapping[local_dev_branch_name] = local_source
+
+        runner = TransformRunner(
+            sink=LocalFileSinkWithDuck(
+                branch=local_dev_branch_name,
+                resolve_dataset_label=foundry_source.resolve_dataset_label,
+                verbose=verbose,
+            ),
+            sourcer=MixedDataSource(
+                sources=sources_mapping,
+                fallback_source=foundry_source,
+            ),
+            fallback_branches=all_branches,
+            verbose=verbose,
+        )
+
+    runner.exec_transform(
         selected_transform,
         omit_checks=omit_checks,
         dry_run=dry_run,

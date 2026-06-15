@@ -8,7 +8,6 @@ from transforms.runner.data_source.download_result import DownloadResult
 from transforms.runner.dataset_logging import (
     dataset_display_name,
     log_dataset_phase,
-    try_row_count,
 )
 import logging
 
@@ -41,7 +40,6 @@ class LocalDataSource(DataSource):
             path=str(local_path),
         ) as phase:
             df = self.session.read.parquet(f"{local_path}/*.parquet")
-            phase["rows"] = try_row_count(df, verbose=self.verbose)
             return DownloadResult(df=df)
 
     async def download_for_branches(self, dataset_path_or_rid: str, branches: list[str]):

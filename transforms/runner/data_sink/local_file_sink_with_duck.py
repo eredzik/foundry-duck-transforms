@@ -12,7 +12,6 @@ from ...generate_types import generate_from_spark
 from transforms.runner.dataset_logging import (
     dataset_display_name,
     log_dataset_phase,
-    try_row_count,
 )
 
 from .local_file_sink import LocalFileSink
@@ -48,13 +47,11 @@ class LocalFileSinkWithDuck(LocalFileSink):
         dataset_path_or_rid: str,
     ) -> None:
         label = self._dataset_label(dataset_path_or_rid)
-        rows = try_row_count(df, verbose=self.verbose)
         with log_dataset_phase(
             "local write",
             label,
             log=logger,
             branch=self.branch,
-            rows=rows if rows is not None else None,
         ) as phase:
             result_path = Path(self.output_dir) / self.branch / dataset_path_or_rid
             result_path.mkdir(parents=True, exist_ok=True)

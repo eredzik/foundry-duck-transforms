@@ -34,7 +34,7 @@ from transforms.runner.data_source.download_result import DownloadMetadata, Down
 from transforms.runner.dataset_logging import (
     dataset_display_name,
     log_dataset_phase,
-    try_row_count,
+    log_verbose_step,
 )
 
 logger = logging.getLogger(__name__)
@@ -248,7 +248,6 @@ class FoundrySource(DataSource):
             )
             if cached_df is not None:
                 phase["cache"] = "query-cache"
-                phase["rows"] = try_row_count(cached_df, verbose=self.verbose)
                 return DownloadResult(
                     df=cached_df,
                     metadata=DownloadMetadata(
@@ -266,7 +265,6 @@ class FoundrySource(DataSource):
             )
             self._save_query_cache(cache_dir, df)
             phase["cache"] = "miss"
-            phase["rows"] = try_row_count(df, verbose=self.verbose)
             return DownloadResult(
                 df=df,
                 metadata=DownloadMetadata(
@@ -307,19 +305,33 @@ class FoundrySource(DataSource):
         self, dataset_path_or_rid: str, branch: str
     ) -> DownloadResult:
         try:
-            online_identity = self._get_online_identity(dataset_path_or_rid, branch)
+            with log_verbose_step(
+                "online identity",
+                verbose=self.verbose,
+                log=logger,
+                dataset=dataset_path_or_rid,
+                branch=branch,
+            ):
+                online_identity = self._get_online_identity(dataset_path_or_rid, branch)
             if online_identity.get("last_transaction") is None:
                 raise BranchNotFoundErrorBase("FOUNDRY")
 
-            dataset_settings = self._dataset_settings(
-                dataset_path_or_rid,
-                online_identity.get("dataset_path"),
-            )
-            identity = self.resolve_dataset_identity(
-                dataset_path_or_rid,
-                branch,
-                dataset_settings,
-            )
+            with log_verbose_step(
+                "resolve identity",
+                verbose=self.verbose,
+                log=logger,
+                dataset=dataset_path_or_rid,
+                branch=branch,
+            ):
+                dataset_settings = self._dataset_settings(
+                    dataset_path_or_rid,
+                    online_identity.get("dataset_path"),
+                )
+                identity = self.resolve_dataset_identity(
+                    dataset_path_or_rid,
+                    branch,
+                    dataset_settings,
+                )
             label = dataset_display_name(
                 dataset_path_or_rid, identity.get("dataset_path")
             )
@@ -333,22 +345,34 @@ class FoundrySource(DataSource):
                     label=label,
                 )
 
-            cached = identity in list(self.ctx.cached_foundry_client.cache.keys())
+            with log_verbose_step(
+                "cache membership",
+                verbose=self.verbose,
+                log=logger,
+                label=label,
+            ):
+                cached = identity in list(self.ctx.cached_foundry_client.cache.keys())
             file_count: int | str = "unknown"
             if not cached:
-                try:
-                    files = self.ctx.cached_foundry_client.api.list_dataset_files(
-                        identity["dataset_rid"],
-                        exclude_hidden_files=True,
-                        view=branch,
-                    )
-                    file_count = len(files)
-                except Exception:
-                    logger.debug(
-                        "Could not list files before download for %s",
-                        label,
-                        exc_info=True,
-                    )
+                with log_verbose_step(
+                    "list files",
+                    verbose=self.verbose,
+                    log=logger,
+                    label=label,
+                ):
+                    try:
+                        files = self.ctx.cached_foundry_client.api.list_dataset_files(
+                            identity["dataset_rid"],
+                            exclude_hidden_files=True,
+                            view=branch,
+                        )
+                        file_count = len(files)
+                    except Exception:
+                        logger.debug(
+                            "Could not list files before download for %s",
+                            label,
+                            exc_info=True,
+                        )
 
             operation = "cache read" if cached else "download"
             with log_dataset_phase(
@@ -359,19 +383,30 @@ class FoundrySource(DataSource):
                 source="foundry",
                 files=file_count if not cached else None,
             ) as phase:
-                last_path, identity = self._fetch_dataset_files(
-                    dataset_path_or_rid,
-                    branch,
-                    identity,
-                )
+                with log_verbose_step(
+                    "fetch dataset",
+                    verbose=self.verbose,
+                    log=logger,
+                    label=label,
+                ):
+                    last_path, identity = self._fetch_dataset_files(
+                        dataset_path_or_rid,
+                        branch,
+                        identity,
+                    )
                 phase["path"] = last_path
                 _validate_cache_key(identity)
-                df = self._load_dataframe_from_cache_path(identity, last_path)
+                with log_verbose_step(
+                    "read parquet",
+                    verbose=self.verbose,
+                    log=logger,
+                    label=label,
+                ):
+                    df = self._load_dataframe_from_cache_path(identity, last_path)
                 phase["format"] = _infer_dataset_format(
                     self.ctx.cached_foundry_client.cache.get_cache_dir(),
                     identity,
                 )
-                phase["rows"] = try_row_count(df, verbose=self.verbose)
                 return DownloadResult(
                     df=df,
                     metadata=DownloadMetadata(

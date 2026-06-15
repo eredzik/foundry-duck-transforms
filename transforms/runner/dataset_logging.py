@@ -28,27 +28,33 @@ def format_elapsed(seconds: float) -> str:
     return f"{int(minutes)}m {secs:.0f}s"
 
 
-def format_row_count(rows: int | None) -> str:
-    if rows is None:
-        return ""
-    return f"{rows:,} rows"
+def _format_details(details: dict[str, Any]) -> str:
+    return ", ".join(
+        f"{key}={value}"
+        for key, value in details.items()
+        if value is not None
+    )
 
 
-def format_row_count_suffix(rows: int | None) -> str:
-    formatted = format_row_count(rows)
-    return f" ({formatted})" if formatted else ""
-
-
-def try_row_count(df: Any, *, verbose: bool = False) -> int | None:
+@contextmanager
+def log_verbose_step(
+    step: str,
+    *,
+    verbose: bool = False,
+    log: logging.Logger = logger,
+    **details: Any,
+) -> Iterator[None]:
     if not verbose:
-        return None
-    if not hasattr(df, "count"):
-        return None
+        yield
+        return
+
+    started = time.perf_counter()
     try:
-        return df.count()
-    except Exception:
-        logger.debug("Could not count rows for dataset", exc_info=True)
-        return None
+        yield
+    finally:
+        elapsed = format_elapsed(time.perf_counter() - started)
+        suffix = f" ({_format_details(details)})" if details else ""
+        log.info(f"  [{step}] {elapsed}{suffix}")
 
 
 @contextmanager
@@ -59,13 +65,6 @@ def log_dataset_phase(
     log: logging.Logger = logger,
     **start_details: Any,
 ) -> Iterator[dict[str, Any]]:
-    def _format_details(details: dict[str, Any]) -> str:
-        return ", ".join(
-            f"{key}={value}"
-            for key, value in details.items()
-            if value is not None
-        )
-
     start_msg = f"Started {operation}: {label}"
     if formatted := _format_details(start_details):
         start_msg = f"{start_msg} ({formatted})"

@@ -14,8 +14,7 @@ from transforms.runner.data_source.download_result import DownloadMetadata, Down
 from transforms.runner.dataset_logging import (
     dataset_display_name,
     format_elapsed,
-    format_row_count_suffix,
-    try_row_count,
+    log_verbose_step,
 )
 
 from .exec_check import execute_check
@@ -48,7 +47,14 @@ class TransformRunner:
         dataset_path_or_rid: str,
         branches: list[str],
     ) -> DownloadResult:
-        label = self._dataset_label(dataset_path_or_rid, branches[-1])
+        with log_verbose_step(
+            "resolve label",
+            verbose=self.verbose,
+            log=logger,
+            input=argname,
+            dataset=dataset_path_or_rid,
+        ):
+            label = self._dataset_label(dataset_path_or_rid, branches[-1])
         logger.info(
             "Loading input '%s': %s (branches: %s)",
             argname,
@@ -75,17 +81,24 @@ class TransformRunner:
             if r.metadata is not None and r.metadata.dataset_name is not None
         ]
         if type_entries:
-            generate_from_spark_batch(type_entries)
+            with log_verbose_step(
+                "generate types",
+                verbose=self.verbose,
+                log=logger,
+                datasets=len(type_entries),
+            ):
+                generate_from_spark_batch(type_entries)
         if metadata_list and hasattr(self.sourcer, "register_duckdb_views"):
-            self.sourcer.register_duckdb_views(metadata_list)
+            with log_verbose_step(
+                "duckdb views",
+                verbose=self.verbose,
+                log=logger,
+                datasets=len(metadata_list),
+            ):
+                self.sourcer.register_duckdb_views(metadata_list)
 
     async def download_datasets(self, transform: Transform, omit_checks: bool, dry_run: bool) -> Dict[str, Union[DataFrame, TransformOutput]]:
         sources: Dict[str, Union[DataFrame, TransformOutput]] = {}
-        if transform.inputs:
-            logger.info(
-                "Preparing %d input dataset(s) for transform",
-                len(transform.inputs),
-            )
         futures_list = [
             (
                 argname,
@@ -156,12 +169,9 @@ class TransformRunner:
                             else:
                                 label = self._dataset_label(output_path)
                                 logger.info(
-                                    "Writing output '%s': %s%s",
+                                    "Writing output '%s': %s",
                                     output_argname,
                                     label,
-                                    format_row_count_suffix(
-                                        try_row_count(df, verbose=self.verbose)
-                                    ),
                                 )
                                 started = time.perf_counter()
                                 self.sink.save_transaction(
@@ -221,11 +231,8 @@ class TransformRunner:
                 output_path = transform.outputs["output"].path_or_rid
                 label = self._dataset_label(output_path)
                 logger.info(
-                    "Writing output: %s%s",
+                    "Writing output: %s",
                     label,
-                    format_row_count_suffix(
-                        try_row_count(res, verbose=self.verbose)
-                    ),
                 )
                 started = time.perf_counter()
                 self.sink.save_transaction(df=res, dataset_path_or_rid=output_path)

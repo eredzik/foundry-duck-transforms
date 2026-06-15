@@ -11,7 +11,7 @@ from transforms.api.transform_df import Input, Output, Transform
 from transforms.runner.data_source.base import DataSource
 from transforms.runner.data_source.download_result import DownloadMetadata, DownloadResult
 from transforms.runner.data_source.foundry_source_with_duck import FoundrySourceWithDuck
-from transforms.runner.dataset_logging import try_row_count
+from transforms.runner.dataset_logging import log_verbose_step
 from transforms.runner.exec_transform import TransformRunner
 from transforms.runner.tests.test_exec_transform import MockDataSink
 
@@ -184,13 +184,19 @@ def test_register_duckdb_views_batch(tmp_path: Path) -> None:
     assert sql_path.exists()
 
 
-def test_try_row_count_skips_without_verbose(spark: SparkSession) -> None:
-    df = spark.createDataFrame([(1,), (2,), (3,)], ["v"])
-    mock_count = MagicMock(return_value=3)
-    df.count = mock_count  # type: ignore[method-assign]
+def test_log_verbose_step_skips_without_verbose(caplog: pytest.LogCaptureFixture) -> None:
+    with caplog.at_level("INFO"):
+        with log_verbose_step("test step", verbose=False):
+            pass
 
-    assert try_row_count(df, verbose=False) is None
-    mock_count.assert_not_called()
+    assert not any("[test step]" in record.message for record in caplog.records)
 
-    assert try_row_count(df, verbose=True) == 3
-    mock_count.assert_called_once()
+
+def test_log_verbose_step_logs_when_verbose(caplog: pytest.LogCaptureFixture) -> None:
+    with caplog.at_level("INFO"):
+        with log_verbose_step("test step", verbose=True, label="example"):
+            pass
+
+    matching = [r for r in caplog.records if "[test step]" in r.message]
+    assert len(matching) == 1
+    assert "label=example" in matching[0].message
