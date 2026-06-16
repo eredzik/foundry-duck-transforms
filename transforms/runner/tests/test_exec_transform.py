@@ -2,7 +2,9 @@ import pytest
 from pathlib import Path
 from typing import Dict, List, Any, cast
 from pyspark.sql import DataFrame, SparkSession, Row
+from transforms.api.check import Check
 from transforms.api.transform_df import Transform, TransformOutput, Input, Output
+from transforms.expectations import col
 from transforms.runner.data_sink.base import DataSink
 from transforms.runner.data_source.base import DataSource
 from transforms.runner.data_source.download_result import DownloadResult
@@ -144,3 +146,31 @@ async def test_dry_run(transform_runner: TransformRunner) -> None:
     # Verify no data was saved
     assert len(transform_runner.sink.saved_data) == 0
     assert len(transform_runner.sink.saved_incremental) == 0 
+
+
+@pytest.mark.asyncio
+async def test_input_checks_warn_do_not_raise(
+    transform_runner: TransformRunner,
+) -> None:
+    transform = SimpleTransform()
+    transform.inputs["input1"].checks = Check(
+        col("value").lt(0),
+        "input should be negative",
+        on_error="WARN",
+    )
+    sources = await transform_runner.download_datasets(transform, omit_checks=False, dry_run=False)
+    assert "input1" in sources
+
+
+@pytest.mark.asyncio
+async def test_input_checks_fail_raise(
+    transform_runner: TransformRunner,
+) -> None:
+    transform = SimpleTransform()
+    transform.inputs["input1"].checks = Check(
+        col("value").lt(0),
+        "input should be negative",
+        on_error="FAIL",
+    )
+    with pytest.raises(Exception):
+        await transform_runner.download_datasets(transform, omit_checks=False, dry_run=False)

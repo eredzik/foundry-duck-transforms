@@ -14,6 +14,7 @@ from pyspark.sql import functions as F
 from pyspark.sql.types import DataType
 
 from transforms.expectations.base import Expectation
+from transforms.expectations.property_expectations import NumericPropertyBuilder, ColumnPropertyBuilder
 
 
 @dataclass
@@ -49,6 +50,16 @@ class SchemaContainsExpectation(Expectation):
 class SchemaBuilder:
     equals = SchemaExpectation
     contains = SchemaContainsExpectation
+    class is_subset_of(Expectation):
+        def __init__(self, expected_schema: Mapping[str, "DataType"]):
+            self.expected_schema = expected_schema
+
+        def run(self, dataframe_to_verify: "DataFrame"):
+            diff = set(dataframe_to_verify.columns).difference(self.expected_schema)
+            if len(diff) > 0:
+                raise AssertionError(
+                    f"Schema of the dataframe is not a subset of expected schema. Extra columns: {diff}"
+                )
 
 class PrimaryKeyExpectation(Expectation):
     def __init__(self, *pk: str):
@@ -57,8 +68,15 @@ class PrimaryKeyExpectation(Expectation):
     def run(self, dataframe_to_verify: "DataFrame"):
         from pyspark.sql import functions as F
 
+        null_condition = F.lit(False)
+        for pk_col in self.pk:
+            null_condition = null_condition | F.col(pk_col).isNull()
+        null_cnt = dataframe_to_verify.filter(null_condition).count()
+        if null_cnt > 0:
+            raise AssertionError("Primary key contains null values")
+
         res = dataframe_to_verify.select(
-            (F.count_distinct(*self.pk) != F.count("*")).alias("result"),
+            (F.count_distinct(*self.pk) == F.count("*")).alias("result"),
         ).collect()
         if not res[0][0]:
             raise AssertionError("Primary key is not unique")
@@ -135,10 +153,56 @@ class ColExpectationBuilder:
 
     def equals(self, other: int | float) -> Expectation:
         return OpComparisonExpectation(colname=self.col, value=other, operator=op.eq)
+
+    def not_equals(self, other: int | float) -> Expectation:
+        return OpComparisonExpectation(colname=self.col, value=other, operator=op.ne)
+
     def non_null(self) -> Expectation:
         def operation(df: DataFrame) -> DataFrame:
             return df.withColumn("result", F.col(self.col).isNotNull())
         return ColExpectation(col=self.col, operation=operation)
+
+    def is_null(self) -> Expectation:
+        def operation(df: DataFrame) -> DataFrame:
+            return df.withColumn("result", F.col(self.col).isNull())
+        return ColExpectation(col=self.col, operation=operation)
+
+    def exists(self) -> Expectation:
+        class _ExistsExpectation(Expectation):
+            def __init__(self, colname: str):
+                self.colname = colname
+
+            def run(self, dataframe_to_verify: "DataFrame"):
+                if self.colname not in dataframe_to_verify.columns:
+                    raise AssertionError(f"Column {self.colname} does not exist")
+
+        return _ExistsExpectation(self.col)
+
+    def has_type(self, dtype: "DataType") -> Expectation:
+        class _HasTypeExpectation(Expectation):
+            def __init__(self, colname: str, expected_type: "DataType"):
+                self.colname = colname
+                self.expected_type = expected_type
+
+            def run(self, dataframe_to_verify: "DataFrame"):
+                field = next((f for f in dataframe_to_verify.schema.fields if f.name == self.colname), None)
+                if field is None:
+                    raise AssertionError(f"Column {self.colname} does not exist")
+                if field.dataType != self.expected_type:
+                    raise AssertionError(
+                        f"Column {self.colname} has type {field.dataType}, expected {self.expected_type}"
+                    )
+
+        return _HasTypeExpectation(self.col, dtype)
+
+    def null_percentage(self) -> NumericPropertyBuilder:
+        return ColumnPropertyBuilder(self.col).null_percentage()
+
+    def null_count(self) -> NumericPropertyBuilder:
+        return ColumnPropertyBuilder(self.col).null_count()
+
+    def distinct_count(self) -> NumericPropertyBuilder:
+        return ColumnPropertyBuilder(self.col).distinct_count()
 
 class AllExpectationBuilder(Expectation):
     def __init__(self, *expectations: Expectation):

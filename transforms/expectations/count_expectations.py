@@ -13,10 +13,11 @@ class CountExpectation(Expectation):
     operator: Callable[[int, int], bool]
 
     def run(self, dataframe_to_verify: "DataFrame"):
-        
         cnt = dataframe_to_verify.count()
-        if cnt < self.reference_count: 
-            raise AssertionError(f"Count is not {self.operator.__name__} than {self.reference_count}")
+        if not self.operator(cnt, self.reference_count):
+            raise AssertionError(
+                f"Count check failed: {cnt} is not {self.operator.__name__} {self.reference_count}"
+            )
 
 class CountExpectationBuilder:
     

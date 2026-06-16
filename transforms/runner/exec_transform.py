@@ -139,6 +139,7 @@ class TransformRunner:
         futures_list = [
             (
                 argname,
+                input,
                 self._download_input(
                     argname,
                     input.path_or_rid,
@@ -147,11 +148,16 @@ class TransformRunner:
             )
             for argname, input in transform.inputs.items()
         ]
-        futures = [fut for (_, fut) in futures_list]
-        names = [name for (name, _) in futures_list]
+        futures = [fut for (_, _, fut) in futures_list]
+        names = [name for (name, _, _) in futures_list]
+        input_defs = [input for (_, input, _) in futures_list]
         results: list[DownloadResult] = await gather(*futures)
         self._post_process_downloads(results)
-        for argname, result in zip(names, results):
+        for argname, input_def, result in zip(names, input_defs, results):
+            if (not omit_checks) and input_def.checks:
+                checks = input_def.checks if isinstance(input_def.checks, list) else [input_def.checks]
+                for check in checks:
+                    execute_check(result.df, check)
             sources[argname] = result.df
         return sources
 
